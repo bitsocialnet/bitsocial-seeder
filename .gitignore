@@ -1,0 +1,10 @@
+ipfs
+.ipfs
+.deploy-env
+seederState.json
+.env
+bin
+node_modules
+TODO.md
+.plebbit
+.bitsocial
