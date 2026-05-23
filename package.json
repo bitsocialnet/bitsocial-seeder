@@ -1,15 +1,14 @@
 {
   "name": "bitsocial-seeder",
+  "private": true,
   "type": "module",
   "version": "1.0.0",
   "main": "start.js",
   "scripts": {
     "start": "node start.js",
-    "daemon": "bitsocial daemon",
     "test": "node --test"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.60",
     "@pkcprotocol/pkc-js": "0.0.36",
     "dotenv": "16.0.3",
     "javascript-time-ago": "2.5.10",

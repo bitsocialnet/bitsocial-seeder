@@ -1,0 +1,13 @@
+.git
+.github
+.DS_Store
+.env
+.deploy-env
+.bitsocial
+.ipfs
+.plebbit
+bin
+node_modules
+npm-debug.log*
+seederState.json
+TODO.md

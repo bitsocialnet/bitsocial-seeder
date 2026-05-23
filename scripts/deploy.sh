@@ -22,7 +22,6 @@ git clone https://github.com/bitsocialnet/bitsocial-seeder.git
 cd bitsocial-seeder
 git reset HEAD --hard
 git pull
-npm ci
 "
 
 # execute script over ssh
@@ -40,7 +39,7 @@ done
 
 SCRIPT="
 cd /opt/bitsocial-seeder
-scripts/start-docker.sh
+scripts/install-docker.sh
 "
 
 echo "$SCRIPT" | sshpass -p "$DEPLOY_PASSWORD" ssh "$DEPLOY_USER"@"$DEPLOY_HOST"

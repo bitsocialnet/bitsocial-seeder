@@ -1,0 +1,27 @@
+services:
+  bitsocial-seeder:
+    image: ghcr.io/bitsocialnet/bitsocial-seeder:latest
+    build:
+      context: .
+    container_name: bitsocial-seeder
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      PKC_RPC_URL: ws://127.0.0.1:9138
+      KUBO_RPC_URL: http://127.0.0.1:50019/api/v0
+      PUBSUB_KUBO_RPC_URL: http://127.0.0.1:50019/api/v0
+      COMMUNITY_LIST_SOURCES: https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master
+      SEEDER_STATE_PATH: /data/seederState.json
+      PIN_CONCURRENCY: "1"
+      MAX_COMMUNITIES: "${MAX_COMMUNITIES:-}"
+    volumes:
+      - bitsocial-seeder-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  bitsocial-seeder-data:

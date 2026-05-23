@@ -17,8 +17,9 @@ if [ -z "${DEPLOY_USER+xxx}" ]; then echo "DEPLOY_USER not set" && exit; fi
 if [ -z "${DEPLOY_PASSWORD+xxx}" ]; then echo "DEPLOY_PASSWORD not set" && exit; fi
 
 SCRIPT="
-docker ps
-docker logs -n 100 -f bitsocial-seeder
+cd /opt/bitsocial-seeder
+docker compose ps
+docker compose logs -n 100 -f bitsocial-seeder
 "
 
 # execute script over ssh
