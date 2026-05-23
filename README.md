@@ -11,6 +11,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
+Published images are available from `ghcr.io/bitsocialnet/bitsocial-seeder`.
+Use `latest` for the current release or a fixed version tag such as `0.1.0`.
+
 The default config expects:
 
 - PKC RPC: `ws://127.0.0.1:9138`
@@ -36,3 +39,10 @@ npm install
 npm test
 npm start
 ```
+
+## Releases
+
+Releases are driven by the `version` in `package.json`. On a successful push to
+`master`, CI updates `CHANGELOG.md`, pushes versioned Docker image tags, and
+creates the matching GitHub Release. This package is private and is not published
+to npm.

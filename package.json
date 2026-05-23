@@ -2,9 +2,11 @@
   "name": "bitsocial-seeder",
   "private": true,
   "type": "module",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "start.js",
   "scripts": {
+    "changelog": "node scripts/generate-changelog.mjs",
+    "changelog:release-notes": "node scripts/changelog-release-notes.mjs",
     "start": "node start.js",
     "test": "node --test"
   },
@@ -22,5 +24,9 @@
   },
   "author": "Bitsocial Labs",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bitsocialnet/bitsocial-seeder.git"
+  },
   "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon."
 }
