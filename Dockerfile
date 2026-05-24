@@ -17,9 +17,12 @@ FROM node:24-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production \
-  PKC_RPC_URL=ws://host.docker.internal:9138 \
-  KUBO_RPC_URL=http://host.docker.internal:50019/api/v0 \
-  PUBSUB_KUBO_RPC_URL=http://host.docker.internal:50019/api/v0 \
+  PKC_RPC_URL=ws://127.0.0.1:9138 \
+  KUBO_RPC_URL=http://127.0.0.1:50019/api/v0 \
+  PUBSUB_KUBO_RPC_URL=http://127.0.0.1:50019/api/v0 \
+  IPFS_GATEWAY_URL=http://127.0.0.1:6473 \
+  SEEDER_DAEMON_DATA_PATH=/data/bitsocial \
+  SEEDER_DAEMON_LOG_PATH=/data/logs \
   SEEDER_STATE_PATH=/data/seederState.json \
   PIN_CONCURRENCY=1
 

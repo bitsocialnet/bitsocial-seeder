@@ -11,6 +11,9 @@ services:
       PKC_RPC_URL: ws://127.0.0.1:9138
       KUBO_RPC_URL: http://127.0.0.1:50019/api/v0
       PUBSUB_KUBO_RPC_URL: http://127.0.0.1:50019/api/v0
+      IPFS_GATEWAY_URL: http://127.0.0.1:6473
+      SEEDER_DAEMON_DATA_PATH: /data/bitsocial
+      SEEDER_DAEMON_LOG_PATH: /data/logs
       COMMUNITY_LIST_SOURCES: https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master
       SEEDER_STATE_PATH: /data/seederState.json
       PIN_CONCURRENCY: "1"
