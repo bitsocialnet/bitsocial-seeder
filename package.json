@@ -29,5 +29,9 @@
     "type": "git",
     "url": "git+https://github.com/bitsocialnet/bitsocial-seeder.git"
   },
-  "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon."
+  "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon.",
+  "optionalDependencies": {
+    "bufferutil": "4.1.0",
+    "utf-8-validate": "6.0.6"
+  }
 }
