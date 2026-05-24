@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.0...v0.1.1) (2026-05-24)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.1`
+
+### Changes
+
+- feat: autostart bundled bitsocial daemon ([10fd76e](https://github.com/bitsocialnet/bitsocial-seeder/commit/10fd76e82a3f18a35ecc4cfac9362002c248db2b))
+- Update README.md ([4d50d5d](https://github.com/bitsocialnet/bitsocial-seeder/commit/4d50d5dddda61f1a277030e1316ed3f3876682bb))
+- fix: include optional websocket deps in lockfile ([8ece52b](https://github.com/bitsocialnet/bitsocial-seeder/commit/8ece52b5259947f7484c1752a0ecc2761d439352))
+
 ## [0.1.0](https://github.com/bitsocialnet/bitsocial-seeder/releases/tag/v0.1.0) (2026-05-23)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.0`
