@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.1...v0.1.2) (2026-05-26)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.2`
+
+### Changes
+
+- fix: seed pubsub routing cids ([e703be5](https://github.com/bitsocialnet/bitsocial-seeder/commit/e703be5ffa70142f5d8a9c56a6ddf60b0e55e2e6))
+- chore: pin latest bitsocial runtime deps ([9ffe19b](https://github.com/bitsocialnet/bitsocial-seeder/commit/9ffe19b1ccdc3a80c17355ee6d4e9035cb36e918))
+- chore: publish seeder package from release ci ([408d615](https://github.com/bitsocialnet/bitsocial-seeder/commit/408d6156e342e1d00588b726e26d463f77ac2a55))
+
 ## [0.1.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.0...v0.1.1) (2026-05-24)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.1`
