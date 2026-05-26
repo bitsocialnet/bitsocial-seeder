@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.2...v0.1.3) (2026-05-26)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.3`
+
+### Changes
+
+- feat: alert when seeder updates are available ([a04e129](https://github.com/bitsocialnet/bitsocial-seeder/commit/a04e12900c34f376abb3026dbb105c06564e3d0d))
+
 ## [0.1.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.1...v0.1.2) (2026-05-26)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.2`
