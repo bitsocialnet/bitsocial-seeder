@@ -3,7 +3,8 @@ ipfs
 .deploy-env
 seederState.json
 .env
-bin
+bin/*
+!bin/bitsocial-seeder.js
 node_modules
 TODO.md
 .plebbit

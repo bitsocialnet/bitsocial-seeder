@@ -1,9 +1,35 @@
 {
-  "name": "bitsocial-seeder",
-  "private": true,
+  "name": "@bitsocial/bitsocial-seeder",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon.",
+  "keywords": [
+    "bitsocial",
+    "pkc",
+    "ipfs",
+    "seeder",
+    "pubsub"
+  ],
+  "author": "Bitsocial Labs",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
   "main": "start.js",
+  "bin": {
+    "bitsocial-seeder": "bin/bitsocial-seeder.js"
+  },
+  "files": [
+    "bin",
+    "config.js",
+    "lib",
+    "start.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "changelog": "node scripts/generate-changelog.mjs",
     "changelog:release-notes": "node scripts/changelog-release-notes.mjs",
@@ -23,13 +49,10 @@
   "overrides": {
     "@pkcprotocol/pkc-js": "0.0.38"
   },
-  "author": "Bitsocial Labs",
-  "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bitsocialnet/bitsocial-seeder.git"
   },
-  "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon.",
   "optionalDependencies": {
     "bufferutil": "4.1.0",
     "utf-8-validate": "6.0.6"

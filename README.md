@@ -1,10 +1,12 @@
 # bitsocial-seeder
 
-Seeds Bitsocial community first pages, post-update CIDs, and pubsub topics through a `bitsocial daemon`.
+Seeds Bitsocial community first pages, post-update CIDs, pubsub topic routing CIDs, and pubsub topics through a `bitsocial daemon`.
 
-It reuses an already-running Kubo and PKC RPC when one is available. If it cannot find a local daemon, it starts the bundled `@bitsocial/bitsocial-cli` daemon automatically and seeds through that node. The supported deployment target is Docker, not npm.
+It reuses an already-running Kubo and PKC RPC when one is available. If it cannot find a local daemon, it starts the bundled `@bitsocial/bitsocial-cli` daemon automatically and seeds through that node.
 
-## Docker
+## Recommended VPS Deployment
+
+Docker is the recommended production path for unattended VPS seeders. It gives you a predictable service wrapper, simpler updates, and fewer local Node/native dependency surprises.
 
 ```sh
 docker compose up -d
@@ -12,7 +14,26 @@ docker compose logs -f
 ```
 
 Published images are available from `ghcr.io/bitsocialnet/bitsocial-seeder`.
-Use `latest` for the current release or a fixed version tag such as `0.1.1`.
+Use `latest` for the current release or a fixed version tag such as `0.1.2`.
+
+## npm
+
+The npm package is useful for local testing, Node-first operators, and advanced setups where Docker is not wanted. It is not the recommended default for unattended VPS deployments.
+
+```sh
+npx @bitsocial/bitsocial-seeder
+```
+
+Or install it globally:
+
+```sh
+npm install -g @bitsocial/bitsocial-seeder
+bitsocial-seeder
+```
+
+The npm package requires Node.js 24 or newer. It uses the same environment variables as the Docker image and will reuse a local Bitsocial daemon when one is reachable.
+
+## Configuration
 
 The default config expects:
 
@@ -69,6 +90,22 @@ npm start
 ## Releases
 
 Releases are driven by the `version` in `package.json`. On a successful push to
-`master`, CI updates `CHANGELOG.md`, pushes versioned Docker image tags, and
-creates the matching GitHub Release. This package is private and is not published
-to npm.
+`master`, CI updates `CHANGELOG.md`, pushes versioned Docker image tags, publishes
+`@bitsocial/bitsocial-seeder` to npm with trusted publishing, and creates the
+matching GitHub Release.
+
+The npm trusted publisher should be configured for:
+
+- npm package: `@bitsocial/bitsocial-seeder`
+- GitHub repository: `bitsocialnet/bitsocial-seeder`
+- workflow filename: `release.yml`
+- allowed action: `npm publish`
+
+The package must exist on npm before trusted publishing can be configured. After
+the first package version exists, future releases should publish through CI
+without long-lived npm tokens.
+
+For initial npm bootstrap, backfill historical package versions before cutting
+the next release if you want npm to show the full release line. Publish `0.1.0`
+and `0.1.1` only from their matching release code plus the minimum npm metadata
+needed for the scoped package; do not publish current code under an old version.
