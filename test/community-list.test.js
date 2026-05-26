@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.js'
 import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.js'
+import {compareVersions, getUpdateMessage} from '../lib/update-check.js'
 import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.js'
 
 test('extracts old multisub community entries', () => {
@@ -88,4 +89,22 @@ test('extracts pubsub routing pins including ipns over pubsub', () => {
       pubsubTopic: '/record/L2lwbnMv...'
     }
   ])
+})
+
+test('compares published seeder versions', () => {
+  assert.equal(compareVersions('0.1.3', '0.1.2'), 1)
+  assert.equal(compareVersions('v0.1.2', '0.1.2'), 0)
+  assert.equal(compareVersions('0.1.2', '0.1.3'), -1)
+})
+
+test('formats update messages only for newer versions', () => {
+  assert.equal(getUpdateMessage({
+    currentVersion: '0.1.2',
+    latestVersion: '0.1.3'
+  }), "Update available: v0.1.3 (current: v0.1.2). Run 'npm install -g @bitsocial/bitsocial-seeder@latest' to upgrade npm installs, or pull 'ghcr.io/bitsocialnet/bitsocial-seeder:latest' for Docker.")
+
+  assert.equal(getUpdateMessage({
+    currentVersion: '0.1.3',
+    latestVersion: '0.1.3'
+  }), undefined)
 })

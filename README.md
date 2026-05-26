@@ -14,7 +14,7 @@ docker compose logs -f
 ```
 
 Published images are available from `ghcr.io/bitsocialnet/bitsocial-seeder`.
-Use `latest` for the current release or a fixed version tag such as `0.1.2`.
+Use `latest` for the current release or a fixed version tag such as `0.1.3`.
 
 ## npm
 
@@ -57,7 +57,15 @@ SEEDER_DAEMON_DATA_PATH=/data/bitsocial
 SEEDER_DAEMON_LOG_PATH=/data/logs
 MAX_COMMUNITIES=20
 PIN_CONCURRENCY=2
+SEEDER_UPDATE_CHECK_ENABLED=true
+SEEDER_UPDATE_CHECK_INTERVAL_MS=86400000
+SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
 ```
+
+The seeder checks npm for a newer `@bitsocial/bitsocial-seeder` release on
+startup and once per day after that. When a newer release exists, it prints an
+update notice in the logs. Set `SEEDER_UPDATE_CHECK_ENABLED=false` to disable
+that check.
 
 ## VPS Sizing
 

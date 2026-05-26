@@ -10,11 +10,14 @@ import config from './config.js'
 import {discoverCommunities} from './lib/discover-communities.js'
 import {ensureDaemon} from './lib/daemon.js'
 import seederState from './lib/seeder-state.js'
+import {startUpdateChecks} from './lib/update-check.js'
 
 if (!config?.seeding?.communityListSources?.length) {
   console.log(`missing config.js 'seeding.communityListSources'`)
   process.exit()
 }
+
+startUpdateChecks(config.updateCheck)
 
 try {
   await ensureDaemon()

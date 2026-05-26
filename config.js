@@ -11,6 +11,11 @@ export default {
     pinConcurrency: Number(process.env.PIN_CONCURRENCY || 2),
     pubsubRoutingProvideIntervalMs: Number(process.env.PUBSUB_ROUTING_PROVIDE_INTERVAL_MS || 6 * 60 * 60 * 1000),
   },
+  updateCheck: {
+    enabled: process.env.SEEDER_UPDATE_CHECK_ENABLED !== 'false',
+    intervalMs: Number(process.env.SEEDER_UPDATE_CHECK_INTERVAL_MS || 24 * 60 * 60 * 1000),
+    timeoutMs: Number(process.env.SEEDER_UPDATE_CHECK_TIMEOUT_MS || 5000)
+  },
   seederState: {
     path: process.env.SEEDER_STATE_PATH || 'seederState.json',
     writeFile: process.env.SEEDER_STATE_WRITE_FILE !== 'false'
