@@ -9,6 +9,7 @@ export default {
     discoverIntervalMs: Number(process.env.DISCOVER_INTERVAL_MS || 10 * 60 * 1000),
     maxCommunities: process.env.MAX_COMMUNITIES ? Number(process.env.MAX_COMMUNITIES) : undefined,
     pinConcurrency: Number(process.env.PIN_CONCURRENCY || 2),
+    pubsubRoutingProvideIntervalMs: Number(process.env.PUBSUB_ROUTING_PROVIDE_INTERVAL_MS || 6 * 60 * 60 * 1000),
   },
   seederState: {
     path: process.env.SEEDER_STATE_PATH || 'seederState.json',
