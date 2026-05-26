@@ -11,8 +11,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "^0.19.62",
-    "@pkcprotocol/pkc-js": "0.0.37",
+    "@bitsocial/bitsocial-cli": "0.19.63",
+    "@pkcprotocol/pkc-js": "0.0.38",
     "dotenv": "16.0.3",
     "javascript-time-ago": "2.5.10",
     "kubo-rpc-client": "6.1.0",
@@ -21,7 +21,7 @@
     "yargs": "17.7.1"
   },
   "overrides": {
-    "@pkcprotocol/pkc-js": "0.0.37"
+    "@pkcprotocol/pkc-js": "0.0.38"
   },
   "author": "Bitsocial Labs",
   "license": "GPL-3.0-or-later",
