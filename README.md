@@ -4,6 +4,14 @@ Seeds Bitsocial community first pages, post-update CIDs, pubsub topic routing CI
 
 It reuses an already-running Kubo and PKC RPC when one is available. If it cannot find a local daemon, it starts the bundled `@bitsocial/bitsocial-cli` daemon automatically and seeds through that node.
 
+## Is this the only way to seed?
+
+No — and for most users it is not the recommended way. Bitsocial desktop apps such as the 5chan Electron app already seed automatically while they are running. If many users keep an app open, the network is well served without anyone running a dedicated seeder. **The apps are the load-bearing seeders of the protocol; this repo is supplemental.**
+
+`bitsocial-seeder` exists for operators who want to contribute consistent 24/7 seeding capacity from a VPS or a spare machine — for example, running closer to popular communities to lower fetch latency, or keeping data available during quiet periods when few app users are online. It is helpful but not required.
+
+This is also an **experimental repository**. Releases are cut frequently, internals change without warning between minor versions, and the project is treated as a place to try ideas that benefit the protocol but are not on its critical path. Please file issues if you hit anything; expect bumps.
+
 ## Recommended VPS Deployment
 
 Docker is the recommended production path for unattended VPS seeders. It gives you a predictable service wrapper, simpler updates, and fewer local Node/native dependency surprises.
@@ -55,12 +63,21 @@ COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/
 SEEDER_DAEMON_AUTOSTART=true
 SEEDER_DAEMON_DATA_PATH=/data/bitsocial
 SEEDER_DAEMON_LOG_PATH=/data/logs
+SEEDER_DB_PATH=/data/seeder.db
 MAX_COMMUNITIES=20
 PIN_CONCURRENCY=2
 SEEDER_UPDATE_CHECK_ENABLED=true
 SEEDER_UPDATE_CHECK_INTERVAL_MS=86400000
 SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
 ```
+
+## State
+
+The seeder keeps its operational state in a single SQLite file at `SEEDER_DB_PATH` (defaults to `./seeder.db`, set to `/data/seeder.db` in the Docker image). The file holds the seeded community list, per-pin bookkeeping for stale-pin GC, the pubsub-routing re-provide throttle, and the durable work queues + scheduler powered by [honker](https://github.com/russellromney/honker).
+
+On first start the seeder will migrate any pre-existing `seederState.json` into the database. After migration the JSON file is no longer read or written and can be removed at the operator's discretion.
+
+Inspect state with the host's `sqlite3` against the file directly, e.g. `sqlite3 /data/seeder.db 'SELECT community_key, address FROM communities'`.
 
 The seeder checks npm for a newer `@bitsocial/bitsocial-seeder` release on
 startup and once per day after that. When a newer release exists, it prints an
