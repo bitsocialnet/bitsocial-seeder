@@ -24,6 +24,7 @@ ENV NODE_ENV=production \
   SEEDER_DAEMON_DATA_PATH=/data/bitsocial \
   SEEDER_DAEMON_LOG_PATH=/data/logs \
   SEEDER_STATE_PATH=/data/seederState.json \
+  SEEDER_DB_PATH=/data/seeder.db \
   PIN_CONCURRENCY=1
 
 RUN apt-get update \

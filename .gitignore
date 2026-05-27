@@ -2,6 +2,9 @@ ipfs
 .ipfs
 .deploy-env
 seederState.json
+seeder.db
+seeder.db-wal
+seeder.db-shm
 .env
 bin/*
 !bin/bitsocial-seeder.js
