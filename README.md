@@ -12,34 +12,77 @@ No — and for most users it is not the recommended way. Bitsocial desktop apps 
 
 This is also an **experimental repository**. Releases are cut frequently, internals change without warning between minor versions, and the project is treated as a place to try ideas that benefit the protocol but are not on its critical path. Please file issues if you hit anything; expect bumps.
 
-## Recommended VPS Deployment
+## Setup
 
-Docker is the recommended production path for unattended VPS seeders. It gives you a predictable service wrapper, simpler updates, and fewer local Node/native dependency surprises.
+The fastest path is Docker Compose. Recommended for unattended VPS seeders — it gives you a predictable service wrapper, simpler updates, and fewer local Node/native dependency surprises.
+
+**1. Clone and start the container:**
 
 ```sh
+git clone https://github.com/bitsocialnet/bitsocial-seeder.git
+cd bitsocial-seeder
 docker compose up -d
+```
+
+**2. Watch the logs to confirm it's seeding:**
+
+```sh
 docker compose logs -f
 ```
 
-Published images are available from `ghcr.io/bitsocialnet/bitsocial-seeder`.
-Use `latest` for the current release or a fixed version tag such as `0.1.3`.
+Within a couple of minutes you should see lines like:
 
-## npm
+```
+discovered N communities to seed
+seeding N communities
+some-community.bso updated 2 minutes ago, page cids: 0, post updates cids: 3, ...
+some-community.bso queueing pubsub routing provide bafkrei...
+some-community.bso pinned Qm... in 1.2s
+```
 
-The npm package is useful for local testing, Node-first operators, and advanced setups where Docker is not wanted. It is not the recommended default for unattended VPS deployments.
+That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the [default 5chan directories](https://github.com/bitsocialnet/lists/tree/master/5chan-directories), and pins their content.
+
+**3. (Optional) Cap the workload on small VPSes:**
+
+```sh
+MAX_COMMUNITIES=10 PIN_CONCURRENCY=1 docker compose up -d
+```
+
+See [VPS Sizing](#vps-sizing) for capacity guidance.
+
+Compose pulls `ghcr.io/bitsocialnet/bitsocial-seeder:latest` by default. To pin a specific version, edit `docker-compose.yml` and set `image: ghcr.io/bitsocialnet/bitsocial-seeder:0.2.0`.
+
+### Run without Docker (npm)
+
+For local testing or Node-first operators (Node 24+ required):
 
 ```sh
 npx @bitsocial/bitsocial-seeder
 ```
 
-Or install it globally:
+Or install globally:
 
 ```sh
 npm install -g @bitsocial/bitsocial-seeder
 bitsocial-seeder
 ```
 
-The npm package requires Node.js 24 or newer. It uses the same environment variables as the Docker image and will reuse a local Bitsocial daemon when one is reachable.
+Same environment variables as the Docker image. Reuses an already-running Bitsocial daemon when one is reachable, otherwise starts the bundled one.
+
+### Seed a different list of communities
+
+Override `COMMUNITY_LIST_SOURCES` with one or more comma-separated URLs or local file paths pointing at JSON files in the format `{"communities": [{"address": "...", "publicKey": "..."}]}`. See [Configuration](#configuration) for the full list of env vars.
+
+### Verify what's being seeded
+
+The seeder's state lives in a SQLite database at `SEEDER_DB_PATH` (default `/data/seeder.db` in Docker):
+
+```sh
+docker compose exec bitsocial-seeder sqlite3 /data/seeder.db \
+  'SELECT address FROM communities'
+```
+
+See [State](#state) for the schema and other tables you can query.
 
 ## Configuration
 
