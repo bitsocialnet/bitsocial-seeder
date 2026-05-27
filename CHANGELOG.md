@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.3...v0.2.0) (2026-05-27)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.2.0`
+
+### Changes
+
+- feat: persist seeder state and durable work queues in SQLite via honker ([9a126ab](https://github.com/bitsocialnet/bitsocial-seeder/commit/9a126ab2e4c2489f46a6b6218d446386f85292e0))
+- docs: position seeder as supplemental and document SQLite migration ([1529699](https://github.com/bitsocialnet/bitsocial-seeder/commit/1529699655637601a84e325be20ebb52953df264))
+- fix: re-enqueue discover-tick on each wait iteration to prevent boot hang ([c2c4030](https://github.com/bitsocialnet/bitsocial-seeder/commit/c2c40301457751eec52f3dcfeae5c7c17643b23f))
+- refactor: extract pubsub-routing throttle helper to dedupe enqueue logic ([fc68636](https://github.com/bitsocialnet/bitsocial-seeder/commit/fc68636b072edcd61c93de556aef1b26ab6ceadd))
+- fix: clear communities table when setCommunitiesSeeding is called with [] ([57a2cf6](https://github.com/bitsocialnet/bitsocial-seeder/commit/57a2cf654177618cbed1da9dfdc25c0006dbe44f))
+
 ## [0.1.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.2...v0.1.3) (2026-05-26)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.1.3`
