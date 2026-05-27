@@ -20,6 +20,9 @@ export default {
     path: process.env.SEEDER_STATE_PATH || 'seederState.json',
     writeFile: process.env.SEEDER_STATE_WRITE_FILE !== 'false'
   },
+  db: {
+    path: process.env.SEEDER_DB_PATH || 'seeder.db'
+  },
   daemon: {
     autostart: process.env.SEEDER_DAEMON_AUTOSTART !== 'false',
     dataPath: process.env.SEEDER_DAEMON_DATA_PATH,

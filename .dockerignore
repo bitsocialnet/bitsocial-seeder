@@ -10,4 +10,7 @@ bin
 node_modules
 npm-debug.log*
 seederState.json
+seeder.db
+seeder.db-wal
+seeder.db-shm
 TODO.md
