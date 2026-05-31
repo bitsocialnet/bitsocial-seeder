@@ -73,6 +73,22 @@ Same environment variables as the Docker image. Reuses an already-running Bitsoc
 
 Override `COMMUNITY_LIST_SOURCES` with one or more comma-separated URLs or local file paths pointing at JSON files in the format `{"communities": [{"address": "...", "publicKey": "..."}]}`. See [Configuration](#configuration) for the full list of env vars.
 
+### Add private communities to seed
+
+Set `COMMUNITY_EXTRA_LIST_SOURCES` to add operator-specific communities without replacing the default public lists:
+
+```sh
+COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json docker compose up -d
+```
+
+Example `/data/extra-communities.json`:
+
+```json
+{"communities": [{"address": "my-community.bso", "publicKey": "12D3KooW..."}]}
+```
+
+Extra sources use the same format as `COMMUNITY_LIST_SOURCES`, can be URLs, files, or directories of JSON files, and are re-read on the normal discovery interval. `MAX_COMMUNITIES` caps only the public list entries; explicitly configured extra communities are always included. If an extra entry has the same `publicKey` or address as a public entry, the extra entry wins.
+
 ### Verify what's being seeded
 
 The seeder's state lives in a SQLite database at `SEEDER_DB_PATH` (default `/data/seeder.db` in Docker):
@@ -103,6 +119,7 @@ PKC_RPC_URL=ws://127.0.0.1:9138
 KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 IPFS_GATEWAY_URL=http://127.0.0.1:6473
 COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master
+COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json
 SEEDER_DAEMON_AUTOSTART=true
 SEEDER_DAEMON_DATA_PATH=/data/bitsocial
 SEEDER_DAEMON_LOG_PATH=/data/logs
