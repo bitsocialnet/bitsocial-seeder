@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.2.0...v0.3.0) (2026-05-31)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.0`
+
+### Changes
+
+- docs: add Setup section with step-by-step quick-start ([3383993](https://github.com/bitsocialnet/bitsocial-seeder/commit/3383993fbb901ce3fc47868f46cc3286c356d7da))
+- Add extra community list sources ([1aa01dc](https://github.com/bitsocialnet/bitsocial-seeder/commit/1aa01dc69565e6d3db482c0b7a366a88f3b5f2b8))
+
 ## [0.2.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.1.3...v0.2.0) (2026-05-27)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.2.0`
