@@ -1,7 +1,7 @@
 {
   "name": "@bitsocial/bitsocial-seeder",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon.",
   "keywords": [
     "bitsocial",
@@ -10,7 +10,7 @@
     "seeder",
     "pubsub"
   ],
-  "author": "Bitsocial Labs",
+  "author": "Bitsocial Forge",
   "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=24"
@@ -37,8 +37,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.63",
-    "@pkcprotocol/pkc-js": "0.0.38",
+    "@bitsocial/bitsocial-cli": "0.19.73",
+    "@pkcprotocol/pkc-js": "0.0.48",
     "@russellthehippo/honker-node": "0.3.3",
     "dotenv": "16.0.3",
     "javascript-time-ago": "2.5.10",
@@ -47,7 +47,7 @@
     "yargs": "17.7.1"
   },
   "overrides": {
-    "@pkcprotocol/pkc-js": "0.0.38"
+    "@pkcprotocol/pkc-js": "0.0.48"
   },
   "repository": {
     "type": "git",
