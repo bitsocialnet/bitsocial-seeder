@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.0...v0.3.1) (2026-06-15)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.1`
+
+### Changes
+
+- chore: update bitsocial runtime for v0.3.1 ([20ebfdd](https://github.com/bitsocialnet/bitsocial-seeder/commit/20ebfdd3d76381d248083369d0985064c93c1588))
+
 ## [0.3.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.2.0...v0.3.0) (2026-05-31)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.0`
