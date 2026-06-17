@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.js'
 import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.js'
+import {isAlreadyPinnedError} from '../lib/kubo-errors.js'
 import {compareVersions, getUpdateMessage} from '../lib/update-check.js'
 import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.js'
 
@@ -89,6 +90,12 @@ test('extracts pubsub routing pins including ipns over pubsub', () => {
       pubsubTopic: '/record/L2lwbnMv...'
     }
   ])
+})
+
+test('recognizes harmless Kubo already-pinned errors', () => {
+  assert.equal(isAlreadyPinnedError(new Error('pin: bafkrei already pinned recursively')), true)
+  assert.equal(isAlreadyPinnedError({message: 'already pinned directly'}), true)
+  assert.equal(isAlreadyPinnedError(new Error('fetch failed')), false)
 })
 
 test('compares published seeder versions', () => {
