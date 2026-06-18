@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.1...v0.3.2) (2026-06-18)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.2`
+
+### Changes
+
+- fix: continue pubsub provides when pins already exist ([03a13bd](https://github.com/bitsocialnet/bitsocial-seeder/commit/03a13bdcdad3abbf8ac4329464698d0f7e033f3f))
+
 ## [0.3.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.0...v0.3.1) (2026-06-15)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.1`
