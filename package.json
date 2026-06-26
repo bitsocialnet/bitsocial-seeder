@@ -37,7 +37,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.73",
+    "@bitsocial/bitsocial-cli": "0.19.78",
     "@pkcprotocol/pkc-js": "0.0.48",
     "@russellthehippo/honker-node": "0.3.3",
     "dotenv": "16.0.3",
