@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.2...v0.3.3) (2026-06-26)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.3`
+
+### Changes
+
+- chore: upgrade @bitsocial/bitsocial-cli to 0.19.78 ([7634761](https://github.com/bitsocialnet/bitsocial-seeder/commit/7634761e9cc8377bf691a133300eb6124c878759))
+- chore: upgrade @bitsocial/bitsocial-cli to 0.19.79 ([5227c5b](https://github.com/bitsocialnet/bitsocial-seeder/commit/5227c5ba0211065193918fbc151cbafe9710fc3d))
+
 ## [0.3.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.1...v0.3.2) (2026-06-18)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.2`
