@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.3...v0.4.0) (2026-06-29)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.4.0`
+
+### Changes
+
+- Bump Bitsocial runtime dependencies ([e49cf00](https://github.com/bitsocialnet/bitsocial-seeder/commit/e49cf0060d0d2e433d28ef706f45edc72ac3d89d))
+- Warn when reusing stale external daemons ([22fa5af](https://github.com/bitsocialnet/bitsocial-seeder/commit/22fa5afc40e0b461aaec51c5b10379aaf8780be0))
+- chore: release 0.4.0 ([6924772](https://github.com/bitsocialnet/bitsocial-seeder/commit/6924772014663e4fa6fa2c69e7f9c72f68b36ab9))
+
 ## [0.3.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.2...v0.3.3) (2026-06-26)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.3`
