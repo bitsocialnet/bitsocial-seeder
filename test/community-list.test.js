@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.js'
 import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.js'
+import {
+  getBitsocialCliPathCandidates,
+  getBitsocialCliVersionFromCommandLineArgs,
+  getExistingDaemonVersionWarning,
+  isSamePkcRpcUrl
+} from '../lib/external-daemon-version.js'
 import {isAlreadyPinnedError} from '../lib/kubo-errors.js'
 import {
   checkRuntimeDependencyUpdates,
@@ -35,6 +44,11 @@ test('recognizes local daemon URLs for autostart', () => {
   assert.equal(isLocalDaemonUrl('ws://127.0.0.1:9138'), true)
   assert.equal(isLocalDaemonUrl('ws://localhost:9138'), true)
   assert.equal(isLocalDaemonUrl('ws://192.0.2.10:9138'), false)
+})
+
+test('matches equivalent local daemon RPC URLs', () => {
+  assert.equal(isSamePkcRpcUrl('ws://127.0.0.1:9138', 'ws://localhost:9138/'), true)
+  assert.equal(isSamePkcRpcUrl('ws://127.0.0.1:9138', 'ws://127.0.0.1:9139'), false)
 })
 
 test('builds daemon args with optional data and log paths', () => {
@@ -154,4 +168,87 @@ test('checks runtime dependency updates through the npm registry helper', async 
   assert.equal(logs.length, 1)
   assert.equal(results[0].latestVersion, '0.19.82')
   assert.equal(results[0].message, logs[0])
+})
+
+test('finds bitsocial CLI package versions from daemon command line args', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-cli-version-'))
+  const packageRoot = path.join(tmpDir, 'node_modules', '@bitsocial', 'bitsocial-cli')
+  const binPath = path.join(packageRoot, 'bin', 'run')
+  fs.mkdirSync(path.dirname(binPath), {recursive: true})
+  fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
+    name: '@bitsocial/bitsocial-cli',
+    version: '0.19.79'
+  }))
+  fs.writeFileSync(binPath, '#!/usr/bin/env node\n')
+
+  try {
+    assert.deepEqual(getBitsocialCliPathCandidates(['node', binPath, 'daemon']), [binPath])
+    assert.equal(await getBitsocialCliVersionFromCommandLineArgs(['node', binPath, 'daemon']), '0.19.79')
+  }
+  finally {
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
+})
+
+test('warns when an existing daemon is older than the bundled CLI', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-stale-daemon-'))
+  const packageRoot = path.join(tmpDir, 'node_modules', '@bitsocial', 'bitsocial-cli')
+  const binPath = path.join(packageRoot, 'bin', 'run')
+  fs.mkdirSync(path.dirname(binPath), {recursive: true})
+  fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
+    name: '@bitsocial/bitsocial-cli',
+    version: '0.19.79'
+  }))
+  fs.writeFileSync(binPath, '#!/usr/bin/env node\n')
+
+  try {
+    const warning = await getExistingDaemonVersionWarning({
+      pkcRpcUrl: 'ws://127.0.0.1:9138',
+      bundledVersion: '0.19.82',
+      loadDaemonStates: async () => [{pid: 123, pkcRpcUrl: 'ws://localhost:9138'}],
+      readCommandLineArgs: async () => ['node', binPath, 'daemon']
+    })
+
+    assert.match(warning, /Existing bitsocial daemon is running @bitsocial\/bitsocial-cli v0\.19\.79/)
+    assert.match(warning, /bitsocial update install --restart-daemons/)
+  }
+  finally {
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
+})
+
+test('warns when an existing daemon version cannot be verified', async () => {
+  const warning = await getExistingDaemonVersionWarning({
+    pkcRpcUrl: 'ws://127.0.0.1:9138',
+    bundledVersion: '0.19.82',
+    loadDaemonStates: async () => [],
+    readCommandLineArgs: async () => []
+  })
+
+  assert.match(warning, /could not verify/)
+  assert.match(warning, /at least v0\.19\.82/)
+})
+
+test('does not warn when the existing daemon is at least the bundled CLI version', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-current-daemon-'))
+  const packageRoot = path.join(tmpDir, 'node_modules', '@bitsocial', 'bitsocial-cli')
+  const binPath = path.join(packageRoot, 'bin', 'run')
+  fs.mkdirSync(path.dirname(binPath), {recursive: true})
+  fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
+    name: '@bitsocial/bitsocial-cli',
+    version: '0.19.82'
+  }))
+  fs.writeFileSync(binPath, '#!/usr/bin/env node\n')
+
+  try {
+    assert.equal(await getExistingDaemonVersionWarning({
+      pkcRpcUrl: 'ws://127.0.0.1:9138',
+      bundledVersion: '0.19.82',
+      loadDaemonStates: async () => [{pid: 123, pkcRpcUrl: 'ws://localhost:9138'}],
+      readCommandLineArgs: async () => ['node', binPath, 'daemon']
+    }), undefined)
+  }
+  finally {
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
 })
