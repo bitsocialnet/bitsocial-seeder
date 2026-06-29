@@ -3,7 +3,12 @@ import test from 'node:test'
 import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.js'
 import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.js'
 import {isAlreadyPinnedError} from '../lib/kubo-errors.js'
-import {compareVersions, getUpdateMessage} from '../lib/update-check.js'
+import {
+  checkRuntimeDependencyUpdates,
+  compareVersions,
+  getRuntimeDependencyUpdateMessage,
+  getUpdateMessage
+} from '../lib/update-check.js'
 import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.js'
 
 test('extracts old multisub community entries', () => {
@@ -114,4 +119,39 @@ test('formats update messages only for newer versions', () => {
     currentVersion: '0.1.3',
     latestVersion: '0.1.3'
   }), undefined)
+})
+
+test('formats runtime dependency update messages without mutating external daemons', () => {
+  assert.equal(getRuntimeDependencyUpdateMessage({
+    packageName: '@bitsocial/bitsocial-cli',
+    currentVersion: '0.19.79',
+    latestVersion: '0.19.82'
+  }), '@bitsocial/bitsocial-cli update available: v0.19.82 (bundled: v0.19.79). Upgrade @bitsocial/bitsocial-seeder to get the newer bundled dependency. If the seeder is reusing an already-running bitsocial daemon, upgrade and restart that daemon separately; bitsocial-seeder does not update external daemon installs.')
+
+  assert.equal(getRuntimeDependencyUpdateMessage({
+    packageName: '@pkcprotocol/pkc-js',
+    currentVersion: '0.0.59',
+    latestVersion: '0.0.59'
+  }), undefined)
+})
+
+test('checks runtime dependency updates through the npm registry helper', async () => {
+  const logs = []
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({version: '0.19.82'})
+  })
+
+  const results = await checkRuntimeDependencyUpdates({
+    dependencies: [{
+      packageName: '@bitsocial/bitsocial-cli',
+      currentVersion: '0.19.79'
+    }],
+    fetchImpl,
+    logger: {log: message => logs.push(message)}
+  })
+
+  assert.equal(logs.length, 1)
+  assert.equal(results[0].latestVersion, '0.19.82')
+  assert.equal(results[0].message, logs[0])
 })

@@ -144,6 +144,13 @@ startup and once per day after that. When a newer release exists, it prints an
 update notice in the logs. Set `SEEDER_UPDATE_CHECK_ENABLED=false` to disable
 that check.
 
+The same check also watches the bundled runtime packages, including
+`@bitsocial/bitsocial-cli` and `@pkcprotocol/pkc-js`. Upgrading the seeder
+package or Docker image upgrades the bundled daemon used by
+`SEEDER_DAEMON_AUTOSTART=true`. If the seeder is reusing an already-running
+external `bitsocial daemon`, upgrade and restart that daemon separately; the
+seeder does not install over or restart externally managed daemon processes.
+
 ## VPS Sizing
 
 For public seeding, size the host like a small Kubo node plus a lightweight Node.js seeder process.
