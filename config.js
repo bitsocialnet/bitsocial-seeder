@@ -7,7 +7,8 @@ const parseSourceList = (value = '') => value
 export default {
   seeding: {
     // JSON URLs, local JSON files, or directories of JSON files to monitor.
-    // The default points at the current 5chan directory candidate lists.
+    // The default points at the current 5chan directory candidate lists. That
+    // remote folder may also contain seeder-only compatibility lists.
     communityListSources: parseSourceList(process.env.COMMUNITY_LIST_SOURCES || defaultCommunityListSources),
     // Operator-specific JSON URLs, local JSON files, or directories to add on
     // top of the public list sources. Extras are not capped by MAX_COMMUNITIES.

@@ -40,7 +40,7 @@ some-community.bso queueing pubsub routing provide bafkrei...
 some-community.bso pinned Qm... in 1.2s
 ```
 
-That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the [default 5chan directories](https://github.com/bitsocialnet/lists/tree/master/5chan-directories), and pins their content.
+That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the [default 5chan directory source](https://github.com/bitsocialnet/lists/tree/master/5chan-directories), and pins their content.
 
 **3. (Optional) Cap the workload on small VPSes:**
 
@@ -106,7 +106,7 @@ The default config expects:
 
 - PKC RPC: `ws://127.0.0.1:9138`
 - Kubo RPC: `http://127.0.0.1:50019/api/v0`
-- community lists: `bitsocialnet/lists` 5chan directory files
+- community lists: `bitsocialnet/lists` 5chan directory files plus seeder-only compatibility lists in the same folder
 - daemon data: `/data/bitsocial`
 
 On Linux hosts the compose file uses `network_mode: host`, so the container can reach the host daemon through `127.0.0.1`.
@@ -130,6 +130,24 @@ SEEDER_UPDATE_CHECK_ENABLED=true
 SEEDER_UPDATE_CHECK_INTERVAL_MS=86400000
 SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
 ```
+
+### Public seeder defaults
+
+`COMMUNITY_LIST_SOURCES` intentionally points at the GitHub contents API for
+`bitsocialnet/lists/5chan-directories`. Released Docker Compose files set this
+environment variable explicitly, so changing `config.js` in a later image is not
+enough to make existing Docker operators seed a new public community.
+
+For compatibility, urgent public seed targets can be published in
+`bitsocialnet/lists/5chan-directories/bitsocial-seeder-communities.json`.
+Existing seeders fetch every JSON file in that folder except `*-defaults.json`,
+while 5chan clients and stats tooling only treat files named
+`5chan-<code>-directory.json` as real 5chan directories.
+
+A future `bitsocial-seeder` release may add a cleaner top-level
+`https://raw.githubusercontent.com/bitsocialnet/lists/master/bitsocial-seeder-communities.json`
+source as the canonical public seeder list. Keep the compatibility file until
+old Compose installs have moved off the folder-only source.
 
 ## State
 
@@ -164,7 +182,7 @@ Recommended starting point:
 - Network: stable public IPv4 or IPv6 with unrestricted outbound TCP/UDP. Allow inbound Kubo swarm traffic if possible, usually TCP/UDP 4001 with the default Kubo config, but keep PKC and Kubo RPC ports private to the host.
 - Transfer: avoid tiny metered bandwidth caps. Start with at least 1 TB/month included transfer and monitor provider-level bandwidth, not only `ipfs stats bw`.
 
-The default 5chan directory source is dozens of small communities, not full media archiving.
+The default community sources are dozens of small directory communities plus a short supplemental seeder list, not full media archiving.
 Disk and bandwidth mostly scale with `MAX_COMMUNITIES`, pinned page/update size, pubsub activity, and Kubo/libp2p overhead.
 On small VPSes, lower `MAX_COMMUNITIES` and keep `PIN_CONCURRENCY=1`.
 
