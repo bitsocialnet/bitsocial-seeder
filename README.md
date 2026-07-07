@@ -182,6 +182,9 @@ Recommended starting point:
 - Network: stable public IPv4 or IPv6 with unrestricted outbound TCP/UDP. Allow inbound Kubo swarm traffic if possible, usually TCP/UDP 4001 with the default Kubo config, but keep PKC and Kubo RPC ports private to the host.
 - Transfer: avoid tiny metered bandwidth caps. Start with at least 1 TB/month included transfer and monitor provider-level bandwidth, not only `ipfs stats bw`.
 
+The compose file ships with memory guardrails: `NODE_OPTIONS: "--max-old-space-size=1024"` caps the seeder's V8 heap (Node's default limit scales with host RAM, and lazy GC otherwise lets a long-running seeder balloon toward ~4 GiB on an 8 GiB host), and `mem_limit: 2g` is a hard container backstop that also covers native/buffer memory.
+Raise both if you seed many more communities than the defaults and the seeder gets memory-starved; on tighter hosts, lower `MAX_COMMUNITIES` before lowering the caps.
+
 The default community sources are dozens of small directory communities plus a short supplemental seeder list, not full media archiving.
 Disk and bandwidth mostly scale with `MAX_COMMUNITIES`, pinned page/update size, pubsub activity, and Kubo/libp2p overhead.
 On small VPSes, lower `MAX_COMMUNITIES` and keep `PIN_CONCURRENCY=1`.

@@ -5,9 +5,14 @@ services:
       context: .
     container_name: bitsocial-seeder
     restart: unless-stopped
+    # Hard backstop above the heap cap (native/buffer memory included).
+    mem_limit: 2g
     network_mode: host
     environment:
       NODE_ENV: production
+      # Cap the V8 heap: Node's default limit scales with host RAM (~4 GiB on
+      # an 8 GiB host) and lazy GC lets a long-running seeder balloon toward it.
+      NODE_OPTIONS: "--max-old-space-size=1024"
       PKC_RPC_URL: ws://127.0.0.1:9138
       KUBO_RPC_URL: http://127.0.0.1:50019/api/v0
       PUBSUB_KUBO_RPC_URL: http://127.0.0.1:50019/api/v0
