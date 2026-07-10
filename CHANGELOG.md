@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.4.0...v0.5.0) (2026-07-10)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.5.0`
+
+### Changes
+
+- docs: document public seeder defaults ([ce230ee](https://github.com/bitsocialnet/bitsocial-seeder/commit/ce230eecf4e9c00cabe7228a20c8e1b21e7fd2e1))
+- compose: ship memory guardrails (V8 heap cap + container mem_limit) ([3228b47](https://github.com/bitsocialnet/bitsocial-seeder/commit/3228b47a6a2c99e38943a6d79888203d07d6762e))
+- Seed official Seedit directories automatically ([807ec3d](https://github.com/bitsocialnet/bitsocial-seeder/commit/807ec3da6b067df3fa8b05feb623185f8b5bc371))
+- chore: release 0.5.0 ([9181770](https://github.com/bitsocialnet/bitsocial-seeder/commit/918177089978fd47072a93c371ad8f2a132fdf57))
+
 ## [0.4.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.3...v0.4.0) (2026-06-29)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.4.0`
