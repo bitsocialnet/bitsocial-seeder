@@ -69,6 +69,27 @@ bitsocial-seeder
 
 Same environment variables as the Docker image. Reuses an already-running Bitsocial daemon when one is reachable, otherwise starts the bundled one.
 
+### Updating
+
+If you installed with Docker Compose, update the repository and recreate the
+container with the latest image:
+
+```sh
+cd /opt/bitsocial-seeder && git pull --ff-only && docker compose pull && docker compose up -d --force-recreate
+```
+
+The `/data` Docker volume is preserved, so the seeder database and bundled
+daemon data survive the update.
+
+If you installed globally with npm, update to the latest release with:
+
+```sh
+npm install -g @bitsocial/bitsocial-seeder@latest
+```
+
+Restart the running `bitsocial-seeder` process after an npm update. Installing
+the new package does not restart an existing process automatically.
+
 ### Seed a different list of communities
 
 Override `COMMUNITY_LIST_SOURCES` with one or more comma-separated URLs or local file paths pointing at JSON files in the format `{"communities": [{"address": "...", "publicKey": "..."}]}`. See [Configuration](#configuration) for the full list of env vars.
