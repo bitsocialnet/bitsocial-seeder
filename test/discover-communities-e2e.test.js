@@ -11,15 +11,20 @@ const writeJson = (filePath, value) => {
 
 test('discovers public and extra list sources end-to-end', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-discover-'))
-  const publicSource = path.join(tmpDir, 'public-communities.json')
+  const fivechanSource = path.join(tmpDir, '5chan-communities.json')
+  const seeditSource = path.join(tmpDir, 'seedit-communities.json')
   const extraSource = path.join(tmpDir, 'extra-communities.json')
   const dbPath = path.join(tmpDir, 'seeder.db')
   const statePath = path.join(tmpDir, 'seederState.json')
 
-  writeJson(publicSource, {
+  writeJson(fivechanSource, {
     communities: [
-      {address: 'shared-public.bso', publicKey: 'shared-public-key'},
-      {address: 'public-two.bso'}
+      {address: 'shared-public.bso', publicKey: 'shared-public-key'}
+    ]
+  })
+  writeJson(seeditSource, {
+    communities: [
+      {address: 'seedit-public.bso'}
     ]
   })
   writeJson(extraSource, {
@@ -40,15 +45,19 @@ test('discovers public and extra list sources end-to-end', () => {
     try {
       await discoverCommunitiesFromLists()
       const first = seederState.communitiesSeeding
-      assert.deepEqual(first.map(community => community.address).sort(), ['extra-one.bso', 'extra-shared.bso'])
+      assert.deepEqual(first.map(community => community.address).sort(), ['extra-one.bso', 'extra-shared.bso', 'seedit-public.bso'])
       assert.deepEqual(first.find(community => community.publicKey === 'shared-public-key'), {
         address: 'extra-shared.bso',
         publicKey: 'shared-public-key'
       })
-      assert.equal(first.some(community => community.address === 'public-two.bso'), false)
+      assert.equal(first.some(community => community.address === 'seedit-public.bso'), true)
 
-      writeJson(process.env.COMMUNITY_LIST_SOURCES, {
-        communities: [{address: 'public-new.bso'}]
+      const [fivechanSource, seeditSource] = process.env.COMMUNITY_LIST_SOURCES.split(',')
+      writeJson(fivechanSource, {
+        communities: [{address: '5chan-new.bso'}]
+      })
+      writeJson(seeditSource, {
+        communities: [{address: 'seedit-new.bso'}]
       })
       writeJson(process.env.COMMUNITY_EXTRA_LIST_SOURCES, {
         communities: [{address: 'extra-two.bso'}]
@@ -56,8 +65,8 @@ test('discovers public and extra list sources end-to-end', () => {
 
       await discoverCommunitiesFromLists()
       const second = seederState.communitiesSeeding
-      assert.deepEqual(second.map(community => community.address).sort(), ['extra-two.bso', 'public-new.bso'])
-      assert.equal(second.some(community => community.address === 'public-two.bso'), false)
+      assert.deepEqual(second.map(community => community.address).sort(), ['5chan-new.bso', 'extra-two.bso', 'seedit-new.bso'])
+      assert.equal(second.some(community => community.address === 'seedit-public.bso'), false)
       assert.equal(second.some(community => community.address === 'extra-one.bso'), false)
       assert.equal(second.some(community => community.publicKey === 'shared-public-key'), false)
     }
@@ -71,9 +80,9 @@ test('discovers public and extra list sources end-to-end', () => {
       cwd: path.resolve(import.meta.dirname, '..'),
       env: {
         ...process.env,
-        COMMUNITY_LIST_SOURCES: publicSource,
+        COMMUNITY_LIST_SOURCES: `${fivechanSource},${seeditSource}`,
         COMMUNITY_EXTRA_LIST_SOURCES: extraSource,
-        MAX_COMMUNITIES: '1',
+        MAX_COMMUNITIES: '2',
         SEEDER_DB_PATH: dbPath,
         SEEDER_STATE_PATH: statePath
       },

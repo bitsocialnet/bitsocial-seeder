@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import {defaultCommunityListSources} from '../config.js'
 import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.js'
 import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.js'
 import {
@@ -19,6 +20,20 @@ import {
   getUpdateMessage
 } from '../lib/update-check.js'
 import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.js'
+
+test('defaults to both official directory list sources', () => {
+  const expectedSources = [
+    'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master',
+    'https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master'
+  ]
+  const compose = fs.readFileSync(new URL('../docker-compose.yml', import.meta.url), 'utf8')
+
+  assert.deepEqual(defaultCommunityListSources, expectedSources)
+  assert.ok(
+    compose.includes(`COMMUNITY_LIST_SOURCES: "${expectedSources.join(',')}"`),
+    'Docker Compose should use the same two official directory sources'
+  )
+})
 
 test('extracts old multisub community entries', () => {
   const entries = extractCommunityEntries({

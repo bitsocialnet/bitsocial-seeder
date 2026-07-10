@@ -1,4 +1,7 @@
-const defaultCommunityListSources = 'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master'
+export const defaultCommunityListSources = [
+  'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master',
+  'https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master'
+]
 const parseSourceList = (value = '') => value
   .split(',')
   .map(source => source.trim())
@@ -7,9 +10,9 @@ const parseSourceList = (value = '') => value
 export default {
   seeding: {
     // JSON URLs, local JSON files, or directories of JSON files to monitor.
-    // The default points at the current 5chan directory candidate lists. That
-    // remote folder may also contain seeder-only compatibility lists.
-    communityListSources: parseSourceList(process.env.COMMUNITY_LIST_SOURCES || defaultCommunityListSources),
+    // The defaults poll the official 5chan and Seedit directory candidate
+    // folders, so additions and list changes do not require a seeder release.
+    communityListSources: parseSourceList(process.env.COMMUNITY_LIST_SOURCES || defaultCommunityListSources.join(',')),
     // Operator-specific JSON URLs, local JSON files, or directories to add on
     // top of the public list sources. Extras are not capped by MAX_COMMUNITIES.
     communityExtraListSources: parseSourceList(process.env.COMMUNITY_EXTRA_LIST_SOURCES || ''),

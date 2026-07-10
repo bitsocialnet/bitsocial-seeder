@@ -40,7 +40,7 @@ some-community.bso queueing pubsub routing provide bafkrei...
 some-community.bso pinned Qm... in 1.2s
 ```
 
-That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the [default 5chan directory source](https://github.com/bitsocialnet/lists/tree/master/5chan-directories), and pins their content.
+That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the official [5chan](https://github.com/bitsocialnet/lists/tree/master/5chan-directories) and [Seedit](https://github.com/bitsocialnet/lists/tree/master/seedit-directories) directory sources, and pins their content. It re-reads both sources on the normal discovery interval, so communities added to either directory are seeded without another `bitsocial-seeder` upgrade.
 
 **3. (Optional) Cap the workload on small VPSes:**
 
@@ -106,7 +106,7 @@ The default config expects:
 
 - PKC RPC: `ws://127.0.0.1:9138`
 - Kubo RPC: `http://127.0.0.1:50019/api/v0`
-- community lists: `bitsocialnet/lists` 5chan directory files plus seeder-only compatibility lists in the same folder
+- community lists: official `bitsocialnet/lists` 5chan and Seedit directory files
 - daemon data: `/data/bitsocial`
 
 On Linux hosts the compose file uses `network_mode: host`, so the container can reach the host daemon through `127.0.0.1`.
@@ -118,7 +118,7 @@ Useful environment overrides:
 PKC_RPC_URL=ws://127.0.0.1:9138
 KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 IPFS_GATEWAY_URL=http://127.0.0.1:6473
-COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master
+COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master,https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master
 COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json
 SEEDER_DAEMON_AUTOSTART=true
 SEEDER_DAEMON_DATA_PATH=/data/bitsocial
@@ -133,21 +133,24 @@ SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
 
 ### Public seeder defaults
 
-`COMMUNITY_LIST_SOURCES` intentionally points at the GitHub contents API for
-`bitsocialnet/lists/5chan-directories`. Released Docker Compose files set this
-environment variable explicitly, so changing `config.js` in a later image is not
-enough to make existing Docker operators seed a new public community.
+`COMMUNITY_LIST_SOURCES` points at the GitHub contents APIs for both
+`bitsocialnet/lists/5chan-directories` and `bitsocialnet/lists/seedit-directories`.
+The seeder re-reads every non-default JSON file from both folders on the normal
+discovery interval. New directory files and changes to existing files therefore
+reach current seeders without another package release or restart.
 
-For compatibility, urgent public seed targets can be published in
+Older releases and old Docker Compose files only poll `5chan-directories`,
+because Compose sets this environment variable explicitly. For compatibility,
+public seed targets that those installs must see can temporarily be mirrored in
 `bitsocialnet/lists/5chan-directories/bitsocial-seeder-communities.json`.
 Existing seeders fetch every JSON file in that folder except `*-defaults.json`,
 while 5chan clients and stats tooling only treat files named
 `5chan-<code>-directory.json` as real 5chan directories.
 
-A future `bitsocial-seeder` release may add a cleaner top-level
-`https://raw.githubusercontent.com/bitsocialnet/lists/master/bitsocial-seeder-communities.json`
-source as the canonical public seeder list. Keep the compatibility file until
-old Compose installs have moved off the folder-only source.
+Keep that compatibility mirror until old folder-only installs have had time to
+upgrade. Current installs use the two directory folders themselves as the
+canonical public sources, avoiding a generated aggregate that could drift from
+the client directory lists.
 
 ## State
 
