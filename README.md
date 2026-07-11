@@ -100,6 +100,24 @@ docker compose exec bitsocial-seeder sqlite3 /data/seeder.db \
 
 See [State](#state) for the schema and other tables you can query.
 
+### Seed pubsub votes (directory contests)
+
+The seeder can also seed [`@bitsocial/pubsub-votes`](https://github.com/bitsocialnet/pubsub-votes) directory contests (e.g. 5chan's board-slot voting). Point it at one or more directory manifests (`{ defaults, contests }` JSONC/JSON, one derived criteria document per slot):
+
+```sh
+VOTES_MANIFEST_SOURCES=https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc
+```
+
+With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so Kubo serves only as the node's blockstore: verified vote bundles land in the daemon's repo and are served over both bitswap networks. The seeder then:
+
+- joins every derived contest read-only (no signer, no voting) and keeps the set reconciled against the manifests every `VOTES_RECONCILE_INTERVAL_MS`,
+- serves checkpoint root records over libp2p-fetch to cold-joining voters (this registration is automatic on join),
+- announces its votes peer as the provider of each contest's criteria CID on the Routing V1 HTTP routers every `VOTES_ANNOUNCE_INTERVAL_MS`, which is how voters' `findProviders()` discovers it.
+
+The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records stay valid across restarts. The announced addresses keep their `0.0.0.0` host — the routers rewrite it to the request's observed public IP. To serve **browser** voters, front the websocket listen port (`VOTES_LIBP2P_WS_PORT`, default 6743) with a TLS proxy and announce the `/dns4/<domain>/tcp/443/wss` address via `VOTES_ANNOUNCE_MULTIADDRS`.
+
+Chain verification reads each contest's gate rule on-chain using the RPC URLs the criteria document declares; a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker) at its own RPC. Votes carry community names whose claims are verified through `.bso` resolution — `VOTES_BSO_RPC_URLS` sets the ETH RPC(s) that resolution reads through; a seeder whose resolver is down counts (and therefore serves) almost nothing.
+
 ## Configuration
 
 The default config expects:
@@ -129,6 +147,18 @@ PIN_CONCURRENCY=2
 SEEDER_UPDATE_CHECK_ENABLED=true
 SEEDER_UPDATE_CHECK_INTERVAL_MS=86400000
 SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
+VOTES_MANIFEST_SOURCES=/data/5chan-directory-criteria.jsonc
+VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz
+VOTES_LIBP2P_TCP_PORT=6742
+VOTES_LIBP2P_WS_PORT=6743
+VOTES_ANNOUNCE_MULTIADDRS=/dns4/seeder.example.com/tcp/443/wss
+VOTES_ANNOUNCE_INTERVAL_MS=21600000
+VOTES_RECONCILE_INTERVAL_MS=600000
+VOTES_CHAIN_RPC_URLS={"base":["https://mainnet.base.org"]}
+VOTES_BSO_RPC_URLS=https://eth.drpc.org
+VOTES_PEER_KEY_PATH=/data/votes-peer.key
+VOTES_FETCH_MAX_STREAMS=256
+VOTES_UPDATE_CONCURRENCY=8
 ```
 
 ## State

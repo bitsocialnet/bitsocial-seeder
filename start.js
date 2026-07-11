@@ -24,6 +24,9 @@ const abortController = new AbortController()
 const {signal} = abortController
 
 let shuttingDown = false
+// Async teardown hooks (e.g. the votes node leaving its topics) that should run inside the
+// shutdown grace window; failures never block exit.
+const shutdownCleanups = []
 const shutdown = (signum) => {
   if (shuttingDown) {
     process.exit(1)
@@ -31,6 +34,7 @@ const shutdown = (signum) => {
   shuttingDown = true
   console.log(`received ${signum}, shutting down`)
   abortController.abort()
+  Promise.allSettled(shutdownCleanups.map(cleanup => cleanup())).catch(() => {})
   setTimeout(() => {
     try { db.close() } catch {}
     process.exit(0)
@@ -82,6 +86,23 @@ try {
 catch (error) {
   console.error(error?.message || error)
   process.exit(1)
+}
+
+// --- votes seeding workers (independent of community discovery, so they start as soon as
+// the daemon is up; lazy import so the embedded libp2p node only exists when configured) ---
+const votesEnabled = config.votes.manifestSources.length > 0
+let votesTickQ
+let votesAnnounceTickQ
+if (votesEnabled) {
+  const {votesTick, votesAnnounceTick, destroyVotesSeeder} = await import('./lib/votes/seeder.js')
+  shutdownCleanups.push(destroyVotesSeeder)
+  votesTickQ = tickQueue('votes-tick')
+  votesAnnounceTickQ = tickQueue('votes-announce-tick')
+  runTickWorker(votesTickQ, 'votes-worker', () => votesTick())
+    .catch(error => console.log(`votes worker exited: ${error?.message || error}`))
+  runTickWorker(votesAnnounceTickQ, 'votes-announce-worker', () => votesAnnounceTick())
+    .catch(error => console.log(`votes announce worker exited: ${error?.message || error}`))
+  votesTickQ.enqueue({reason: 'startup'})
 }
 
 // --- discover loop ---
@@ -154,6 +175,20 @@ if (config.updateCheck.enabled !== false) {
     name: 'update-check-tick',
     queue: 'update-check-tick',
     schedule: everyS(config.updateCheck.intervalMs),
+    payload: {}
+  })
+}
+if (votesEnabled) {
+  scheduler.add({
+    name: 'votes-tick',
+    queue: 'votes-tick',
+    schedule: everyS(config.votes.reconcileIntervalMs),
+    payload: {}
+  })
+  scheduler.add({
+    name: 'votes-announce-tick',
+    queue: 'votes-announce-tick',
+    schedule: everyS(config.votes.announceIntervalMs),
     payload: {}
   })
 }
