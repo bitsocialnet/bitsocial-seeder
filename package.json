@@ -46,9 +46,6 @@
     "string-strip-html": "13.4.8",
     "yargs": "17.7.1"
   },
-  "overrides": {
-    "@pkcprotocol/pkc-js": "0.0.69"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bitsocialnet/bitsocial-seeder.git"
