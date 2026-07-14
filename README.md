@@ -40,7 +40,7 @@ some-community.bso queueing pubsub routing provide bafkrei...
 some-community.bso pinned Qm... in 1.2s
 ```
 
-That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the [default 5chan directories](https://github.com/bitsocialnet/lists/tree/master/5chan-directories), and pins their content.
+That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the official [5chan](https://github.com/bitsocialnet/lists/tree/master/5chan-directories) and [Seedit](https://github.com/bitsocialnet/lists/tree/master/seedit-directories) directory sources, and pins their content. It re-reads both sources on the normal discovery interval, so communities added to either directory are seeded without another `bitsocial-seeder` upgrade.
 
 **3. (Optional) Cap the workload on small VPSes:**
 
@@ -68,6 +68,27 @@ bitsocial-seeder
 ```
 
 Same environment variables as the Docker image. Reuses an already-running Bitsocial daemon when one is reachable, otherwise starts the bundled one.
+
+### Updating
+
+If you installed with Docker Compose, update the repository and recreate the
+container with the latest image:
+
+```sh
+cd /opt/bitsocial-seeder && git pull --ff-only && docker compose pull && docker compose up -d --force-recreate
+```
+
+The `/data` Docker volume is preserved, so the seeder database and bundled
+daemon data survive the update.
+
+If you installed globally with npm, update to the latest release with:
+
+```sh
+npm install -g @bitsocial/bitsocial-seeder@latest
+```
+
+Restart the running `bitsocial-seeder` process after an npm update. Installing
+the new package does not restart an existing process automatically.
 
 ### Seed a different list of communities
 
@@ -124,7 +145,7 @@ The default config expects:
 
 - PKC RPC: `ws://127.0.0.1:9138`
 - Kubo RPC: `http://127.0.0.1:50019/api/v0`
-- community lists: `bitsocialnet/lists` 5chan directory files
+- community lists: official `bitsocialnet/lists` 5chan and Seedit directory files
 - daemon data: `/data/bitsocial`
 
 On Linux hosts the compose file uses `network_mode: host`, so the container can reach the host daemon through `127.0.0.1`.
@@ -136,7 +157,7 @@ Useful environment overrides:
 PKC_RPC_URL=ws://127.0.0.1:9138
 KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 IPFS_GATEWAY_URL=http://127.0.0.1:6473
-COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master
+COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master,https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master
 COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json
 SEEDER_DAEMON_AUTOSTART=true
 SEEDER_DAEMON_DATA_PATH=/data/bitsocial
@@ -161,6 +182,27 @@ VOTES_FETCH_MAX_STREAMS=256
 VOTES_UPDATE_CONCURRENCY=8
 ```
 
+### Public seeder defaults
+
+`COMMUNITY_LIST_SOURCES` points at the GitHub contents APIs for both
+`bitsocialnet/lists/5chan-directories` and `bitsocialnet/lists/seedit-directories`.
+The seeder re-reads every non-default JSON file from both folders on the normal
+discovery interval. New directory files and changes to existing files therefore
+reach current seeders without another package release or restart.
+
+Older releases and old Docker Compose files only poll `5chan-directories`,
+because Compose sets this environment variable explicitly. For compatibility,
+public seed targets that those installs must see can temporarily be mirrored in
+`bitsocialnet/lists/5chan-directories/bitsocial-seeder-communities.json`.
+Existing seeders fetch every JSON file in that folder except `*-defaults.json`,
+while 5chan clients and stats tooling only treat files named
+`5chan-<code>-directory.json` as real 5chan directories.
+
+Keep that compatibility mirror until old folder-only installs have had time to
+upgrade. Current installs use the two directory folders themselves as the
+canonical public sources, avoiding a generated aggregate that could drift from
+the client directory lists.
+
 ## State
 
 The seeder keeps its operational state in a single SQLite file at `SEEDER_DB_PATH` (defaults to `./seeder.db`, set to `/data/seeder.db` in the Docker image). The file holds the seeded community list, per-pin bookkeeping for stale-pin GC, the pubsub-routing re-provide throttle, and the durable work queues + scheduler powered by [honker](https://github.com/russellromney/honker).
@@ -173,6 +215,13 @@ The seeder checks npm for a newer `@bitsocial/bitsocial-seeder` release on
 startup and once per day after that. When a newer release exists, it prints an
 update notice in the logs. Set `SEEDER_UPDATE_CHECK_ENABLED=false` to disable
 that check.
+
+The same check also watches the bundled runtime packages, including
+`@bitsocial/bitsocial-cli` and `@pkcprotocol/pkc-js`. Upgrading the seeder
+package or Docker image upgrades the bundled daemon used by
+`SEEDER_DAEMON_AUTOSTART=true`. If the seeder is reusing an already-running
+external `bitsocial daemon`, upgrade and restart that daemon separately; the
+seeder does not install over or restart externally managed daemon processes.
 
 ## VPS Sizing
 
@@ -187,7 +236,10 @@ Recommended starting point:
 - Network: stable public IPv4 or IPv6 with unrestricted outbound TCP/UDP. Allow inbound Kubo swarm traffic if possible, usually TCP/UDP 4001 with the default Kubo config, but keep PKC and Kubo RPC ports private to the host.
 - Transfer: avoid tiny metered bandwidth caps. Start with at least 1 TB/month included transfer and monitor provider-level bandwidth, not only `ipfs stats bw`.
 
-The default 5chan directory source is dozens of small communities, not full media archiving.
+The compose file ships with memory guardrails: `NODE_OPTIONS: "--max-old-space-size=1024"` caps the seeder's V8 heap (Node's default limit scales with host RAM, and lazy GC otherwise lets a long-running seeder balloon toward ~4 GiB on an 8 GiB host), and `mem_limit: 2g` is a hard container backstop that also covers native/buffer memory.
+Raise both if you seed many more communities than the defaults and the seeder gets memory-starved; on tighter hosts, lower `MAX_COMMUNITIES` before lowering the caps.
+
+The default community sources are dozens of small directory communities plus a short supplemental seeder list, not full media archiving.
 Disk and bandwidth mostly scale with `MAX_COMMUNITIES`, pinned page/update size, pubsub activity, and Kubo/libp2p overhead.
 On small VPSes, lower `MAX_COMMUNITIES` and keep `PIN_CONCURRENCY=1`.
 

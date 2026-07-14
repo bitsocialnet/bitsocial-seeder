@@ -93,8 +93,10 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Use latest npm
-        run: npm install -g npm@latest
+      - name: Use npm 11
+        run: |
+          npm install -g npm@11.17.0
+          npm --version
 
       - name: Resolve release
         id: release

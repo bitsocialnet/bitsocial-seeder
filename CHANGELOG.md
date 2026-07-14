@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.5.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.4.0...v0.5.0) (2026-07-10)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.5.0`
+
+### Changes
+
+- docs: document public seeder defaults ([ce230ee](https://github.com/bitsocialnet/bitsocial-seeder/commit/ce230eecf4e9c00cabe7228a20c8e1b21e7fd2e1))
+- compose: ship memory guardrails (V8 heap cap + container mem_limit) ([3228b47](https://github.com/bitsocialnet/bitsocial-seeder/commit/3228b47a6a2c99e38943a6d79888203d07d6762e))
+- Seed official Seedit directories automatically ([807ec3d](https://github.com/bitsocialnet/bitsocial-seeder/commit/807ec3da6b067df3fa8b05feb623185f8b5bc371))
+- chore: release 0.5.0 ([9181770](https://github.com/bitsocialnet/bitsocial-seeder/commit/918177089978fd47072a93c371ad8f2a132fdf57))
+- ci: pin npm 11 for trusted publishing ([c8ba2a1](https://github.com/bitsocialnet/bitsocial-seeder/commit/c8ba2a1231fc2be8fa09c9065d6c26324f2d22c4))
+
+## [0.4.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.3...v0.4.0) (2026-06-29)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.4.0`
+
+### Changes
+
+- Bump Bitsocial runtime dependencies ([e49cf00](https://github.com/bitsocialnet/bitsocial-seeder/commit/e49cf0060d0d2e433d28ef706f45edc72ac3d89d))
+- Warn when reusing stale external daemons ([22fa5af](https://github.com/bitsocialnet/bitsocial-seeder/commit/22fa5afc40e0b461aaec51c5b10379aaf8780be0))
+- chore: release 0.4.0 ([6924772](https://github.com/bitsocialnet/bitsocial-seeder/commit/6924772014663e4fa6fa2c69e7f9c72f68b36ab9))
+
+## [0.3.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.2...v0.3.3) (2026-06-26)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.3`
+
+### Changes
+
+- chore: upgrade @bitsocial/bitsocial-cli to 0.19.78 ([7634761](https://github.com/bitsocialnet/bitsocial-seeder/commit/7634761e9cc8377bf691a133300eb6124c878759))
+- chore: upgrade @bitsocial/bitsocial-cli to 0.19.79 ([5227c5b](https://github.com/bitsocialnet/bitsocial-seeder/commit/5227c5ba0211065193918fbc151cbafe9710fc3d))
+
 ## [0.3.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.3.1...v0.3.2) (2026-06-18)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.3.2`
