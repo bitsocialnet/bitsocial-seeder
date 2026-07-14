@@ -28,9 +28,13 @@ services:
       PIN_CONCURRENCY: "1"
       MAX_COMMUNITIES: "${MAX_COMMUNITIES:-}"
       VOTES_MANIFEST_SOURCES: "${VOTES_MANIFEST_SOURCES:-}"
+      # network_mode is host, so a machine with a public interface IP announces it as-is;
+      # behind NAT set this to the publicly dialable addrs (the library drops private ones).
       VOTES_ANNOUNCE_MULTIADDRS: "${VOTES_ANNOUNCE_MULTIADDRS:-}"
       VOTES_CHAIN_RPC_URLS: "${VOTES_CHAIN_RPC_URLS:-}"
       VOTES_PEER_KEY_PATH: /data/votes-peer.key
+      VOTES_BLOCKSTORE_PATH: /data/votes-blockstore
+      VOTES_DATA_PATH: /data/votes-cache
     volumes:
       - bitsocial-seeder-data:/data
     logging:

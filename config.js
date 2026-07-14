@@ -2,8 +2,9 @@ export const defaultCommunityListSources = [
   'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master',
   'https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master'
 ]
-// The delegated Routing V1 HTTP routers pkc-js clients query by default; the votes seeder
-// announces its embedded libp2p peer to the same set so voters' findProviders() can find it.
+// The delegated Routing V1 HTTP routers pkc-js clients query by default; the votes library's
+// built-in announcer (PubsubVoterOptions.httpRouterUrls) announces the embedded libp2p peer
+// to the same set so voters' findProviders() can find it.
 const defaultVotesHttpRouterUrls = 'https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz'
 const parseSourceList = (value = '') => value
   .split(',')
@@ -30,17 +31,21 @@ export default {
     // seeding disabled.
     manifestSources: parseSourceList(process.env.VOTES_MANIFEST_SOURCES || ''),
     // Routing V1 HTTP routers to announce the votes peer to (and to look up other peers
-    // through). Defaults to the routers pkc-js clients query.
+    // through). Passed to the library's built-in announcer (hourly + debounced on checkpoint
+    // changes; announces criteria CIDs, checkpoint roots, and chunk CIDs). Defaults to the
+    // routers pkc-js clients query.
     httpRouterUrls: parseSourceList(process.env.VOTES_HTTP_ROUTER_URLS || defaultVotesHttpRouterUrls),
-    // Listen host/ports for the embedded votes libp2p node. The announced addrs keep the
-    // 0.0.0.0 host — the routers rewrite it to the request's observed public IP.
+    // Listen host/ports for the embedded votes libp2p node. Listening on 0.0.0.0 makes
+    // libp2p expand to the machine's interface addrs, so a host with a public interface IP
+    // announces it without further config.
     listenHost: process.env.VOTES_LIBP2P_HOST || '0.0.0.0',
     tcpPort: Number(process.env.VOTES_LIBP2P_TCP_PORT || 6742),
     wsPort: Number(process.env.VOTES_LIBP2P_WS_PORT || 6743),
-    // Extra/override multiaddrs to announce to the routers (e.g. a /dns4/.../wss addr
-    // behind a TLS proxy, so browser voters can dial). Empty = announce the listen addrs.
+    // Multiaddrs to announce instead of the listen addrs (libp2p addresses.announce), e.g. a
+    // /dns4/.../wss addr behind a TLS proxy so browser voters can dial. The library's
+    // announcer drops private/unspecified addrs client-side, so behind NAT or a Docker
+    // bridge network (no public interface IP) this MUST be set or the routers learn nothing.
     announceMultiaddrs: parseSourceList(process.env.VOTES_ANNOUNCE_MULTIADDRS || ''),
-    announceIntervalMs: Number(process.env.VOTES_ANNOUNCE_INTERVAL_MS || 6 * 60 * 60 * 1000),
     reconcileIntervalMs: Number(process.env.VOTES_RECONCILE_INTERVAL_MS || 10 * 60 * 1000),
     // Per-chain RPC override, JSON: {"base": ["https://my-base-rpc"]}. Chains without an
     // override use the rpcUrls each contest's criteria.requires.chains declares.
@@ -51,6 +56,12 @@ export default {
     bsoRpcUrls: parseSourceList(process.env.VOTES_BSO_RPC_URLS || 'https://eth.drpc.org'),
     // The embedded node's persistent peer identity (announced to the routers).
     peerKeyPath: process.env.VOTES_PEER_KEY_PATH || 'votes-peer.key',
+    // The embedded Helia node's on-disk blockstore (verified bundle blocks + checkpoint
+    // chunks, served over the votes network's bitswap).
+    blockstorePath: process.env.VOTES_BLOCKSTORE_PATH || 'votes-blockstore',
+    // The votes library's persistent caches (gate results, name resolutions). Unset = the
+    // library default, {cwd}/.bitsocial-pubsub-votes.
+    dataPath: process.env.VOTES_DATA_PATH,
     // libp2p-fetch stream cap: the default 32 inbound streams strands a directory-sized
     // cold join (63 concurrent checkpoint pulls) — raise it on a public seeder.
     fetchMaxStreams: Number(process.env.VOTES_FETCH_MAX_STREAMS || 256),

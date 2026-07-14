@@ -3,11 +3,7 @@ import test from 'node:test'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {CID} from 'multiformats/cid'
-import {sha256} from 'multiformats/hashes/sha2'
-import {buildAnnounceBody, announceToRouters} from '../lib/votes/announce.js'
 import {fetchVotesManifestSource, loadVotesCriteria} from '../lib/votes/manifest.js'
-import {KuboBlockstore} from '../lib/votes/kubo-blockstore.js'
 
 // A minimal valid manifest in the 5chan-directory-criteria.jsonc shape; two slots, one with
 // a rule override, plus JSONC comments the loader must strip.
@@ -75,80 +71,30 @@ test('a failing manifest source keeps serving its last good derivation', async (
   assert.equal(second.length, 2) // cached derivation still served
 })
 
-test('builds the unsigned Routing V1 announce body the routers accept', () => {
-  const body = buildAnnounceBody({
-    peerId: '12D3KooWNMybS8JqELi38ZBX897PrjWbCrGoMKfw3bgoqzC2n1Dh',
-    addrs: ['/ip4/0.0.0.0/tcp/6742'],
-    keys: ['bafyone', 'bafytwo']
-  })
-  assert.equal(body.Providers.length, 1)
-  const [provider] = body.Providers
-  assert.equal(provider.Payload.ID, '12D3KooWNMybS8JqELi38ZBX897PrjWbCrGoMKfw3bgoqzC2n1Dh')
-  assert.deepEqual(provider.Payload.Addrs, ['/ip4/0.0.0.0/tcp/6742'])
-  assert.deepEqual(provider.Payload.Keys, ['bafyone', 'bafytwo'])
-  assert.equal(typeof provider.Payload.Timestamp, 'number')
-})
+test('the embedded node persists blocks in an on-disk blockstore across reopen', async () => {
+  const {FsBlockstore} = await import('blockstore-fs')
+  const {CID} = await import('multiformats/cid')
+  const {sha256} = await import('multiformats/hashes/sha2')
 
-test('announceToRouters PUTs to /routing/v1/providers and collects per-router failures', async () => {
-  const http = await import('node:http')
-  const requests = []
-  const server = http.createServer((req, res) => {
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', () => {
-      requests.push({method: req.method, url: req.url, body: JSON.parse(body)})
-      res.writeHead(200, {'Content-Type': 'application/json'})
-      res.end('{}')
-    })
-  })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const routerUrl = `http://127.0.0.1:${server.address().port}`
-
-  const body = buildAnnounceBody({peerId: 'peer', addrs: ['/ip4/0.0.0.0/tcp/1'], keys: ['bafyone']})
-  const downRouter = 'http://127.0.0.1:1' // nothing listens on port 1
-  const {succeeded, failed} = await announceToRouters({routerUrls: [routerUrl, downRouter], body, timeoutMs: 3000})
-
-  assert.deepEqual(succeeded, [routerUrl])
-  assert.equal(failed.length, 1)
-  assert.equal(failed[0].routerUrl, downRouter)
-  assert.equal(requests.length, 1)
-  assert.equal(requests[0].method, 'PUT')
-  assert.equal(requests[0].url, '/routing/v1/providers')
-  assert.deepEqual(requests[0].body.Providers[0].Payload.Keys, ['bafyone'])
-
-  server.close()
-})
-
-test('KuboBlockstore is local-only (offline) on reads and validates put CIDs', async () => {
+  const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'votes-blockstore-')), 'blocks')
   const bytes = new TextEncoder().encode('hello votes')
-  const rawCid = CID.createV1(0x55, await sha256.digest(bytes))
-  const calls = []
-  const fakeKubo = {
-    block: {
-      put: async (block, options) => {
-        calls.push({op: 'put', options})
-        assert.equal(block, bytes)
-        return rawCid
-      },
-      get: async (cid, options) => {
-        calls.push({op: 'get', options})
-        return bytes
-      },
-      stat: async (cid, options) => {
-        calls.push({op: 'stat', options})
-        throw Error(`block was not found locally (offline): ipld: could not find ${cid}`)
-      }
-    }
+  const cid = CID.createV1(0x55, await sha256.digest(bytes))
+
+  const first = new FsBlockstore(dir)
+  await first.open()
+  await first.put(cid, bytes)
+  await first.close()
+
+  // A restarted seeder reopens the same directory and still serves the block. In this
+  // js-stores generation get() yields the block bytes as an async iterable of chunks
+  // (the same shape @bitsocial/pubsub-votes normalises via adaptBlockstore).
+  const second = new FsBlockstore(dir)
+  await second.open()
+  assert.equal(await second.has(cid), true)
+  const chunks = []
+  for await (const chunk of await second.get(cid)) {
+    chunks.push(...chunk)
   }
-  const blockstore = new KuboBlockstore(fakeKubo)
-
-  assert.equal(await blockstore.put(rawCid, bytes), rawCid)
-  assert.deepEqual(await blockstore.get(rawCid), bytes)
-  assert.equal(await blockstore.has(rawCid), false) // stat "not found" → false, not a throw
-  assert.equal(calls.find(c => c.op === 'get').options.offline, true)
-  assert.equal(calls.find(c => c.op === 'stat').options.offline, true)
-
-  // A put whose bytes derive a different CID than addressed must throw, never store silently.
-  const otherCid = CID.createV1(0x55, await sha256.digest(new Uint8Array([1])))
-  await assert.rejects(() => blockstore.put(otherCid, bytes), /derived/)
+  assert.deepEqual(new Uint8Array(chunks), bytes)
+  await second.close()
 })

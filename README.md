@@ -129,13 +129,13 @@ The seeder can also seed [`@bitsocial/pubsub-votes`](https://github.com/bitsocia
 VOTES_MANIFEST_SOURCES=https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc
 ```
 
-With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so Kubo serves only as the node's blockstore: verified vote bundles land in the daemon's repo and are served over both bitswap networks. The seeder then:
+With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so votes seeding is **Helia-only**: verified vote bundles and checkpoint chunks persist in the node's own on-disk blockstore (`VOTES_BLOCKSTORE_PATH`) and are served over the votes network's bitswap, with no Kubo involvement. The seeder then:
 
 - joins every derived contest read-only (no signer, no voting) and keeps the set reconciled against the manifests every `VOTES_RECONCILE_INTERVAL_MS`,
 - serves checkpoint root records over libp2p-fetch to cold-joining voters (this registration is automatic on join),
-- announces its votes peer as the provider of each contest's criteria CID on the Routing V1 HTTP routers every `VOTES_ANNOUNCE_INTERVAL_MS`, which is how voters' `findProviders()` discovers it.
+- announces its votes peer as the provider of each contest's criteria CID, checkpoint root, and chunk CIDs on the Routing V1 HTTP routers (`VOTES_HTTP_ROUTER_URLS`), which is how voters' `findProviders()` discovers it — the library's built-in announcer re-announces hourly and debounces on joins and checkpoint changes.
 
-The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records stay valid across restarts. The announced addresses keep their `0.0.0.0` host — the routers rewrite it to the request's observed public IP. To serve **browser** voters, front the websocket listen port (`VOTES_LIBP2P_WS_PORT`, default 6743) with a TLS proxy and announce the `/dns4/<domain>/tcp/443/wss` address via `VOTES_ANNOUNCE_MULTIADDRS`.
+The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records stay valid across restarts. The announcer drops private, loopback, and unspecified addresses before they reach the routers, so the machine must expose a publicly dialable address: on a host with a public interface IP the `0.0.0.0` listen expands to it automatically, but behind NAT or a Docker bridge network you **must** set `VOTES_ANNOUNCE_MULTIADDRS` to the publicly reachable addrs or the routers learn nothing. To serve **browser** voters, front the websocket listen port (`VOTES_LIBP2P_WS_PORT`, default 6743) with a TLS proxy and announce the `/dns4/<domain>/tcp/443/wss` address via `VOTES_ANNOUNCE_MULTIADDRS`.
 
 Chain verification reads each contest's gate rule on-chain using the RPC URLs the criteria document declares; a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker) at its own RPC. Votes carry community names whose claims are verified through `.bso` resolution — `VOTES_BSO_RPC_URLS` sets the ETH RPC(s) that resolution reads through; a seeder whose resolver is down counts (and therefore serves) almost nothing.
 
@@ -173,11 +173,12 @@ VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.
 VOTES_LIBP2P_TCP_PORT=6742
 VOTES_LIBP2P_WS_PORT=6743
 VOTES_ANNOUNCE_MULTIADDRS=/dns4/seeder.example.com/tcp/443/wss
-VOTES_ANNOUNCE_INTERVAL_MS=21600000
 VOTES_RECONCILE_INTERVAL_MS=600000
 VOTES_CHAIN_RPC_URLS={"base":["https://mainnet.base.org"]}
 VOTES_BSO_RPC_URLS=https://eth.drpc.org
 VOTES_PEER_KEY_PATH=/data/votes-peer.key
+VOTES_BLOCKSTORE_PATH=/data/votes-blockstore
+VOTES_DATA_PATH=/data/votes-cache
 VOTES_FETCH_MAX_STREAMS=256
 VOTES_UPDATE_CONCURRENCY=8
 ```

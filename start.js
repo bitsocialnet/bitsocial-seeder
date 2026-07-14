@@ -93,16 +93,12 @@ catch (error) {
 // the daemon is up; lazy import so the embedded libp2p node only exists when configured) ---
 const votesEnabled = config.votes.manifestSources.length > 0
 let votesTickQ
-let votesAnnounceTickQ
 if (votesEnabled) {
-  const {votesTick, votesAnnounceTick, destroyVotesSeeder} = await import('./lib/votes/seeder.js')
+  const {votesTick, destroyVotesSeeder} = await import('./lib/votes/seeder.js')
   shutdownCleanups.push(destroyVotesSeeder)
   votesTickQ = tickQueue('votes-tick')
-  votesAnnounceTickQ = tickQueue('votes-announce-tick')
   runTickWorker(votesTickQ, 'votes-worker', () => votesTick())
     .catch(error => console.log(`votes worker exited: ${error?.message || error}`))
-  runTickWorker(votesAnnounceTickQ, 'votes-announce-worker', () => votesAnnounceTick())
-    .catch(error => console.log(`votes announce worker exited: ${error?.message || error}`))
   votesTickQ.enqueue({reason: 'startup'})
 }
 
@@ -184,12 +180,6 @@ if (votesEnabled) {
     name: 'votes-tick',
     queue: 'votes-tick',
     schedule: everyS(config.votes.reconcileIntervalMs),
-    payload: {}
-  })
-  scheduler.add({
-    name: 'votes-announce-tick',
-    queue: 'votes-announce-tick',
-    schedule: everyS(config.votes.announceIntervalMs),
     payload: {}
   })
 }
