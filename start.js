@@ -24,8 +24,8 @@ const abortController = new AbortController()
 const {signal} = abortController
 
 let shuttingDown = false
-// Async teardown hooks (e.g. the votes node leaving its topics) that should run inside the
-// shutdown grace window; failures never block exit.
+// Async teardown hooks (e.g. the votes seeder flushing its checkpoint snapshot) that should
+// finish inside the shutdown grace window; failures never block exit.
 const shutdownCleanups = []
 const shutdown = (signum) => {
   if (shuttingDown) {
@@ -34,11 +34,15 @@ const shutdown = (signum) => {
   shuttingDown = true
   console.log(`received ${signum}, shutting down`)
   abortController.abort()
-  Promise.allSettled(shutdownCleanups.map(cleanup => cleanup())).catch(() => {})
-  setTimeout(() => {
+  const exit = () => {
     try { db.close() } catch {}
     process.exit(0)
-  }, 5000).unref()
+  }
+  // Exit as soon as the cleanups settle — voter.destroy() is what flushes the debounced
+  // checkpoint write, so cutting it off at a fixed sleep could lose votes on a slow disk —
+  // with the grace timer as the backstop against a hung cleanup.
+  Promise.allSettled(shutdownCleanups.map(cleanup => cleanup())).then(exit, exit)
+  setTimeout(exit, 5000).unref()
 }
 process.once('SIGINT', () => shutdown('SIGINT'))
 process.once('SIGTERM', () => shutdown('SIGTERM'))

@@ -123,21 +123,25 @@ See [State](#state) for the schema and other tables you can query.
 
 ### Seed pubsub votes (directory contests)
 
-The seeder can also seed [`@bitsocial/pubsub-votes`](https://github.com/bitsocialnet/pubsub-votes) directory contests (e.g. 5chan's board-slot voting). Point it at one or more directory manifests (`{ defaults, contests }` JSONC/JSON, one derived criteria document per slot):
+The seeder can also seed [`@bitsocial/pubsub-voting`](https://github.com/bitsocialnet/pubsub-voting) directory contests (e.g. 5chan's board-slot voting). Point it at one or more directory manifests (`{ defaults, contests }` JSONC/JSON, one derived criteria document per slot):
 
 ```sh
 VOTES_MANIFEST_SOURCES=https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc
 ```
 
-With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so votes seeding is **Helia-only**: verified vote bundles and checkpoint chunks persist in the node's own on-disk blockstore (`VOTES_BLOCKSTORE_PATH`) and are served over the votes network's bitswap, with no Kubo involvement. The seeder then:
+With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so votes seeding is **Helia-only**: verified vote bundles and checkpoint chunks persist in the node's own on-disk blockstore (`VOTES_BLOCKSTORE_PATH`), and each contest's checkpoint snapshot persists under `VOTES_DATA_PATH` so a restart keeps the tally, with no Kubo involvement. The seeder then:
 
 - joins every derived contest read-only (no signer, no voting) and keeps the set reconciled against the manifests every `VOTES_RECONCILE_INTERVAL_MS`,
 - serves checkpoint root records over libp2p-fetch to cold-joining voters (this registration is automatic on join),
 - announces its votes peer as the provider of each contest's criteria CID, checkpoint root, and chunk CIDs on the Routing V1 HTTP routers (`VOTES_HTTP_ROUTER_URLS`), which is how voters' `findProviders()` discovers it — the library's built-in announcer re-announces hourly and debounces on joins and checkpoint changes.
 
-The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records stay valid across restarts. The announcer drops private, loopback, and unspecified addresses before they reach the routers, so the machine must expose a publicly dialable address: on a host with a public interface IP the `0.0.0.0` listen expands to it automatically, but behind NAT or a Docker bridge network you **must** set `VOTES_ANNOUNCE_MULTIADDRS` to the publicly reachable addrs or the routers learn nothing. To serve **browser** voters, front the websocket listen port (`VOTES_LIBP2P_WS_PORT`, default 6743) with a TLS proxy and announce the `/dns4/<domain>/tcp/443/wss` address via `VOTES_ANNOUNCE_MULTIADDRS`.
+Browser voters can only dial **WSS** (and browsers cannot dial each other — the gossipsub mesh forms through publicly dialable seeders), so the node runs **AutoTLS** ([libp2p.direct](https://libp2p.direct)): once AutoNAT confirms the machine's public address, the ACME broker issues a real TLS certificate and the node announces a browser-dialable `/dns4/<peerid>.libp2p.direct/.../tls/ws` address — no reverse proxy, no manual multiaddr config. The certificate takes a few minutes on first run (ACME + DNS propagation) and persists in `VOTES_DATASTORE_PATH` across restarts; watch the log for `AutoTLS certificate provisioned` and the announced addrs. Open `VOTES_LIBP2P_TCP_PORT` and `VOTES_LIBP2P_WS_PORT` in the firewall. Behind provider NAT (the interfaces only carry private IPs) AutoNAT may never confirm the address on its own — set `VOTES_PUBLIC_IP` so the public addrs get announced at all. `VOTES_AUTO_TLS=off` disables all of it for local testing.
 
-Chain verification reads each contest's gate rule on-chain using the RPC URLs the criteria document declares; a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker) at its own RPC. Votes carry community names whose claims are verified through `.bso` resolution — `VOTES_BSO_RPC_URLS` sets the ETH RPC(s) that resolution reads through; a seeder whose resolver is down counts (and therefore serves) almost nothing.
+The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records (and the AutoTLS domain, which embeds the peer id) stay valid across restarts — treat that key file and the `votes-keychain.pass` next to it as part of the seeder's state.
+
+Chain verification reads each contest's gate rule on-chain. Since pubsub-voting 0.1.x the criteria document names chains by ticker + chainId only — RPC endpoints are each client's own setting (so operators can swap endpoints without forking topics): the seeder defaults to the viem chain's public RPC, and a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker, e.g. `{"base":["https://my-base-rpc"]}`) at its own. Votes carry community names whose claims are verified through `.bso` resolution — the seeder uses the same default resolver providers bitsocial-cli gives pkc-js unless `VOTES_BSO_RPC_URLS` overrides them; a seeder whose resolvers are down counts (and therefore serves) almost nothing.
+
+The log answers the questions production debugging asks — did a voter ever connect (`votes conn open`), join a topic (`votes topic subscribe`), pull the checkpoint (`votes fetch serve`, with the decoded bundle count — a root record is constant-size whether the contest is empty or not, so only the decoded `count` distinguishes "no votes" from "checkpoint didn't load"), or publish a vote (`votes gossip ... live vote bundle`)?
 
 ## Configuration
 
@@ -172,12 +176,14 @@ VOTES_MANIFEST_SOURCES=/data/5chan-directory-criteria.jsonc
 VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz
 VOTES_LIBP2P_TCP_PORT=6742
 VOTES_LIBP2P_WS_PORT=6743
-VOTES_ANNOUNCE_MULTIADDRS=/dns4/seeder.example.com/tcp/443/wss
+VOTES_AUTO_TLS=on
+VOTES_PUBLIC_IP=203.0.113.7
 VOTES_RECONCILE_INTERVAL_MS=600000
 VOTES_CHAIN_RPC_URLS={"base":["https://mainnet.base.org"]}
-VOTES_BSO_RPC_URLS=https://eth.drpc.org
+VOTES_BSO_RPC_URLS=https://eth.drpc.org,https://ethereum-rpc.publicnode.com
 VOTES_PEER_KEY_PATH=/data/votes-peer.key
 VOTES_BLOCKSTORE_PATH=/data/votes-blockstore
+VOTES_DATASTORE_PATH=/data/votes-datastore
 VOTES_DATA_PATH=/data/votes-cache
 VOTES_FETCH_MAX_STREAMS=256
 VOTES_UPDATE_CONCURRENCY=8

@@ -41,26 +41,40 @@ export default {
     listenHost: process.env.VOTES_LIBP2P_HOST || '0.0.0.0',
     tcpPort: Number(process.env.VOTES_LIBP2P_TCP_PORT || 6742),
     wsPort: Number(process.env.VOTES_LIBP2P_WS_PORT || 6743),
-    // Multiaddrs to announce instead of the listen addrs (libp2p addresses.announce), e.g. a
-    // /dns4/.../wss addr behind a TLS proxy so browser voters can dial. The library's
-    // announcer drops private/unspecified addrs client-side, so behind NAT or a Docker
-    // bridge network (no public interface IP) this MUST be set or the routers learn nothing.
-    announceMultiaddrs: parseSourceList(process.env.VOTES_ANNOUNCE_MULTIADDRS || ''),
+    // AutoTLS (libp2p.direct) gets the node a real TLS certificate once AutoNAT confirms
+    // the public address, so BROWSER voters can dial the announced
+    // /dns4/<peerid>.libp2p.direct/.../tls/ws addr — no reverse proxy, no manual announce
+    // config. "off" only for local testing (plain /ws, no bootstrap, no certificate).
+    autoTls: process.env.VOTES_AUTO_TLS !== 'off',
+    // Behind provider NAT the interfaces only carry private IPs, AutoNAT may never confirm
+    // the public address on its own, and the router announcer (which drops private addrs
+    // client-side) would announce nothing: set the machine's public IP here to append it
+    // to the announced addrs explicitly.
+    publicIp: process.env.VOTES_PUBLIC_IP,
     reconcileIntervalMs: Number(process.env.VOTES_RECONCILE_INTERVAL_MS || 10 * 60 * 1000),
-    // Per-chain RPC override, JSON: {"base": ["https://my-base-rpc"]}. Chains without an
-    // override use the rpcUrls each contest's criteria.requires.chains declares.
+    // Per-chain RPC override, JSON: {"base": ["https://my-base-rpc"]}. Since pubsub-voting
+    // 0.1.x RPC endpoints are the client's own setting (deliberately NOT in the criteria
+    // document — swapping endpoints must not fork topics); chains without an override use
+    // the viem chain's default public RPC.
     chainRpcUrls: JSON.parse(process.env.VOTES_CHAIN_RPC_URLS || '{}'),
     // ETH RPC URL(s) for .bso community-name resolution (one BsoResolver per URL). Votes
     // carry community names; a bundle whose name cannot be verified is never counted, so
-    // a seeder without a working resolver serves next to nothing.
-    bsoRpcUrls: parseSourceList(process.env.VOTES_BSO_RPC_URLS || 'https://eth.drpc.org'),
-    // The embedded node's persistent peer identity (announced to the routers).
+    // a seeder without a working resolver serves next to nothing. Empty = the same default
+    // provider list bitsocial-cli gives pkc-js.
+    bsoRpcUrls: parseSourceList(process.env.VOTES_BSO_RPC_URLS || ''),
+    // The embedded node's persistent peer identity (announced to the routers; the AutoTLS
+    // domain embeds it). The keychain password guarding the certificate key lives next to
+    // it as votes-keychain.pass.
     peerKeyPath: process.env.VOTES_PEER_KEY_PATH || 'votes-peer.key',
     // The embedded Helia node's on-disk blockstore (verified bundle blocks + checkpoint
     // chunks, served over the votes network's bitswap).
     blockstorePath: process.env.VOTES_BLOCKSTORE_PATH || 'votes-blockstore',
-    // The votes library's persistent caches (gate results, name resolutions). Unset = the
-    // library default, {cwd}/.bitsocial-pubsub-votes.
+    // The embedded libp2p node's datastore (AutoTLS certificate + keychain persist here,
+    // so restarts don't re-run ACME).
+    datastorePath: process.env.VOTES_DATASTORE_PATH || 'votes-datastore',
+    // The votes library's persistent state: gate-result and name-resolution caches, plus
+    // each contest's checkpoint snapshot (checkpoints.db) — what keeps the tally across
+    // restarts. Unset = the library default, {cwd}/.bitsocial-pubsub-voting.
     dataPath: process.env.VOTES_DATA_PATH,
     // libp2p-fetch stream cap: the default 32 inbound streams strands a directory-sized
     // cold join (63 concurrent checkpoint pulls) — raise it on a public seeder.

@@ -28,12 +28,14 @@ services:
       PIN_CONCURRENCY: "1"
       MAX_COMMUNITIES: "${MAX_COMMUNITIES:-}"
       VOTES_MANIFEST_SOURCES: "${VOTES_MANIFEST_SOURCES:-}"
-      # network_mode is host, so a machine with a public interface IP announces it as-is;
-      # behind NAT set this to the publicly dialable addrs (the library drops private ones).
-      VOTES_ANNOUNCE_MULTIADDRS: "${VOTES_ANNOUNCE_MULTIADDRS:-}"
+      # network_mode is host, so AutoTLS can confirm the public interface IP and provision
+      # the browser-dialable certificate as-is; behind provider NAT (interfaces only carry
+      # private IPs) set the machine's public IP so it gets announced at all.
+      VOTES_PUBLIC_IP: "${VOTES_PUBLIC_IP:-}"
       VOTES_CHAIN_RPC_URLS: "${VOTES_CHAIN_RPC_URLS:-}"
       VOTES_PEER_KEY_PATH: /data/votes-peer.key
       VOTES_BLOCKSTORE_PATH: /data/votes-blockstore
+      VOTES_DATASTORE_PATH: /data/votes-datastore
       VOTES_DATA_PATH: /data/votes-cache
     volumes:
       - bitsocial-seeder-data:/data

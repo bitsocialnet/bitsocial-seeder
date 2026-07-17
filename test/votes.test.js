@@ -19,7 +19,7 @@ const MANIFEST_JSONC = `{
     "weight": {"type": "constant", "value": 1},
     "requires": {
       "rules": ["erc721-min-balance", "constant"],
-      "chains": {"base": {"chainId": 8453, "rpcUrls": ["https://mainnet.base.org"]}}
+      "chains": {"base": {"chainId": 8453}}
     }
   },
   "contests": [
@@ -60,6 +60,16 @@ test('loads every manifest file in a local directory source', async () => {
   assert.equal(manifests[0].contests.length, 2)
 })
 
+test('a manifest carrying RPC URLs in the criteria fails derivation loudly', async () => {
+  // pubsub-voting 0.1.x moved RPC endpoints OUT of the criteria document (they'd fork the
+  // topic on every endpoint swap): a pre-0.1.x manifest still carrying requires.chains
+  // rpcUrls must be a loud per-source error, never a silently different document.
+  const stale = MANIFEST_JSONC.replace('{"chainId": 8453}', '{"chainId": 8453, "rpcUrls": ["https://mainnet.base.org"]}')
+  const {filePath} = writeTempManifest('stale.jsonc', stale)
+  const criteria = await loadVotesCriteria([filePath])
+  assert.equal(criteria.length, 0) // derivation failed, nothing served from this source
+})
+
 test('a failing manifest source keeps serving its last good derivation', async () => {
   const {filePath} = writeTempManifest('directory.jsonc', MANIFEST_JSONC)
   const cache = []
@@ -87,7 +97,7 @@ test('the embedded node persists blocks in an on-disk blockstore across reopen',
 
   // A restarted seeder reopens the same directory and still serves the block. In this
   // js-stores generation get() yields the block bytes as an async iterable of chunks
-  // (the same shape @bitsocial/pubsub-votes normalises via adaptBlockstore).
+  // (the same shape @bitsocial/pubsub-voting normalises via adaptBlockstore).
   const second = new FsBlockstore(dir)
   await second.open()
   assert.equal(await second.has(cid), true)
