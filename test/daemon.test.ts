@@ -203,6 +203,27 @@ test('a readiness flap resets the readyStableMs debounce', {timeout: 30000}, asy
   )
 })
 
+test('checkDaemonEndpoints reports per-endpoint status', async () => {
+  // Both fakes are listening and healthy after the previous tests. With
+  // PUBSUB_KUBO_RPC_URL unset it equals KUBO_RPC_URL, so the pubsub probe is
+  // the same-URL shortcut.
+  const healthy = await daemon.checkDaemonEndpoints()
+  assert.deepEqual(healthy, {
+    pkcPortOpen: true,
+    pkcReachable: true,
+    kuboReachable: true,
+    pubsubReachable: true,
+    ready: true
+  })
+
+  kuboFake.state.ready = false
+  const kuboDown = await daemon.checkDaemonEndpoints()
+  assert.equal(kuboDown.pkcReachable, true)
+  assert.equal(kuboDown.kuboReachable, false)
+  assert.equal(kuboDown.ready, false)
+  kuboFake.state.ready = true
+})
+
 test('stopDaemon escalates to SIGKILL when the daemon ignores SIGINT', {timeout: 30000}, async () => {
   // Free the endpoint ports so ensureDaemon takes the autostart branch.
   await Promise.all([pkcFake.close(), kuboFake.close()])

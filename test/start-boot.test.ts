@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {spawn} from 'node:child_process'
+import {spawn, spawnSync} from 'node:child_process'
 import fs from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
@@ -14,6 +14,39 @@ const getFreePort = () => new Promise<number>((resolve, reject) => {
     server.close(() => resolve(port))
   })
   server.once('error', reject)
+})
+
+// The published entrypoint is the bin shim (a bare `import '../start.ts'`). Run it with an
+// effectively-empty community list (',' parses to zero sources, bypassing the defaults
+// fallback) so it exercises the shim and start.ts's config guard, then exits 0 before
+// touching any daemon RPC.
+test('the bin shim runs start.ts, which exits cleanly on an empty community list config', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-bin-'))
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [path.resolve(import.meta.dirname, '..', 'bin', 'bitsocial-seeder.ts')],
+      {
+        cwd: tmpDir,
+        env: {
+          ...process.env,
+          COMMUNITY_LIST_SOURCES: ',',
+          COMMUNITY_EXTRA_LIST_SOURCES: '',
+          VOTES_MANIFEST_SOURCES: '',
+          SEEDER_DB_PATH: path.join(tmpDir, 'seeder.db'),
+          SEEDER_STATE_PATH: path.join(tmpDir, 'seederState.json'),
+          SEEDER_UPDATE_CHECK_ENABLED: 'false'
+        },
+        encoding: 'utf8',
+        timeout: 60_000
+      }
+    )
+    assert.match(result.stdout, /missing config\.ts 'seeding\.communityListSources'/)
+    assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`)
+  }
+  finally {
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
 })
 
 // Boot smoke test: start.ts as a real child process against fake daemon RPCs

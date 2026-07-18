@@ -10,16 +10,20 @@ import {
   getBitsocialCliPathCandidates,
   getBitsocialCliVersionFromCommandLineArgs,
   getExistingDaemonVersionWarning,
-  isSamePkcRpcUrl
+  isSamePkcRpcUrl,
+  readProcessCommandLineArgs,
+  warnIfExistingDaemonMayBeStale
 } from '../lib/external-daemon-version.ts'
 import {isAlreadyPinnedError} from '../lib/kubo-errors.ts'
 import {
+  checkForUpdate,
   checkRuntimeDependencyUpdates,
   compareVersions,
+  fetchLatestVersion,
   getRuntimeDependencyUpdateMessage,
   getUpdateMessage
 } from '../lib/update-check.ts'
-import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.ts'
+import {extractCommunityEntries, getCommunityKey, getCommunityLookup, getTimeAgo} from '../lib/utils.ts'
 
 test('defaults to both official directory list sources', () => {
   const expectedSources = [
@@ -242,6 +246,69 @@ test('warns when an existing daemon version cannot be verified', async () => {
 
   assert.match(warning!, /could not verify/)
   assert.match(warning!, /at least v0\.19\.82/)
+})
+
+test('fetchLatestVersion reads the npm registry latest dist-tag and rejects bad responses', async () => {
+  const okFetch: any = async () => ({ok: true, json: async () => ({version: '0.9.9'})})
+  assert.equal(await fetchLatestVersion({packageName: 'x', fetchImpl: okFetch}), '0.9.9')
+
+  const errorFetch: any = async () => ({ok: false, status: 503})
+  await assert.rejects(fetchLatestVersion({packageName: 'x', fetchImpl: errorFetch}), /npm registry returned 503/)
+
+  const noVersionFetch: any = async () => ({ok: true, json: async () => ({})})
+  await assert.rejects(fetchLatestVersion({packageName: 'x', fetchImpl: noVersionFetch}), /did not include a version/)
+})
+
+test('checkForUpdate logs an update notice only when the registry has a newer version', async () => {
+  const logs: any[] = []
+  const logger = {log: (message: any) => logs.push(message)} as any
+  const fetchVersion = (version: string): any => async () => ({ok: true, json: async () => ({version})})
+
+  const outdated = await checkForUpdate({
+    currentVersion: '0.1.0',
+    packageName: '@bitsocial/bitsocial-seeder',
+    fetchImpl: fetchVersion('0.2.0'),
+    logger
+  })
+  assert.equal(outdated.latestVersion, '0.2.0')
+  assert.equal(outdated.message, logs[0])
+  assert.match(logs[0], /Update available: v0\.2\.0 \(current: v0\.1\.0\)/)
+
+  const current = await checkForUpdate({
+    currentVersion: '0.2.0',
+    packageName: '@bitsocial/bitsocial-seeder',
+    fetchImpl: fetchVersion('0.2.0'),
+    logger
+  })
+  assert.equal(current.message, undefined)
+  assert.equal(logs.length, 1)
+})
+
+test('formats seconds timestamps as relative time and null as never', () => {
+  assert.equal(getTimeAgo(undefined), 'never')
+  assert.equal(getTimeAgo(null), 'never')
+  assert.match(getTimeAgo(Math.floor(Date.now() / 1000) - 120), /minutes? ago/)
+})
+
+test('reads this process command line args from /proc or ps', async () => {
+  const args = await readProcessCommandLineArgs(process.pid)
+  assert.ok(args.length > 0, 'expected at least the executable path')
+  assert.ok(args.join(' ').includes('node'), `expected the node executable in ${JSON.stringify(args)}`)
+
+  // A pid that cannot exist yields an empty list, never a throw.
+  assert.deepEqual(await readProcessCommandLineArgs(2 ** 31 - 7), [])
+})
+
+test('warnIfExistingDaemonMayBeStale warns and never throws when no daemon matches', async () => {
+  const warnings: any[] = []
+  // Port 1 matches no real daemon state, so both the no-match branch and the
+  // load-failure branch produce a could-not-verify warning through the logger.
+  await warnIfExistingDaemonMayBeStale({
+    pkcRpcUrl: 'ws://127.0.0.1:1',
+    logger: {warn: (message: any) => warnings.push(message)} as any
+  })
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0], /could not verify/)
 })
 
 test('does not warn when the existing daemon is at least the bundled CLI version', async () => {
