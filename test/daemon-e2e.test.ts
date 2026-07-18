@@ -25,7 +25,7 @@ const getSkipReason = () => {
   }
 }
 
-test('seeds a community end-to-end through a bundled bitsocial-cli daemon', {timeout: 170_000}, t => {
+test('seeds a community end-to-end through a bundled bitsocial-cli daemon', {timeout: 300_000}, t => {
   const skipReason = getSkipReason()
   if (skipReason) {
     return t.skip(skipReason)
@@ -37,7 +37,7 @@ test('seeds a community end-to-end through a bundled bitsocial-cli daemon', {tim
       cwd: repoRoot,
       env: {...process.env, SEEDER_E2E_TMP: tmpDir},
       encoding: 'utf8',
-      timeout: 160_000
+      timeout: 290_000
     })
     assert.equal(
       result.status,

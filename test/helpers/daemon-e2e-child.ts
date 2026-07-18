@@ -99,8 +99,9 @@ try {
   step('pubsub subscribe ok')
 
   // Full seeding loop: host a community on the daemon, point the seeder at it,
-  // and wait for its update to reconcile pins into the durable queues.
-  const community = await pkc.createCommunity({})
+  // and wait for its update to reconcile pins into the durable queues. No
+  // challenges, so the post published below verifies without answering one.
+  const community = await pkc.createCommunity({settings: {challenges: []}})
   assert.ok(community.address, 'daemon should create a local community over pkc rpc')
   await community.start()
   step(`hosting community ${community.address}`)
@@ -108,7 +109,7 @@ try {
   const {default: seederState} = await import('../../lib/seeder-state.ts')
   const {db} = await import('../../lib/db.ts')
   seederState.communitiesSeeding = [{address: community.address}]
-  const {subscribeCommunitiesUpdates, pubsubRoutingQueue} = await import('../../lib/seed-communities.ts')
+  const {subscribeCommunitiesUpdates, pinOpQueue, pubsubRoutingQueue} = await import('../../lib/seed-communities.ts')
   await subscribeCommunitiesUpdates()
 
   const deadline = Date.now() + 60_000
@@ -136,6 +137,55 @@ try {
   }
   assert.ok(providedJobs > 0, 'the community update should queue at least one routing provide')
   step(`provided and pinned ${providedJobs} pubsub routing cids`)
+
+  // Content pins: publish a post into the challenge-less community and wait
+  // for a later community update to track its content cids (postUpdates
+  // always; pageCids only once the community paginates beyond the preloaded
+  // page, so they are not required here).
+  const signer = await pkc.createSigner()
+  const post = await pkc.createComment({
+    signer,
+    communityAddress: community.address,
+    title: 'daemon e2e post',
+    content: 'covers pageCids/postUpdates pinning'
+  })
+  const verification: any = await new Promise((resolve, reject) => {
+    post.once('challengeverification', resolve)
+    post.once('error', reject)
+    post.publish().catch(reject)
+  })
+  assert.equal(verification.challengeSuccess, true, `post publish failed: ${JSON.stringify(verification.challengeErrors || verification.reason)}`)
+  step('post published and verified without a challenge')
+
+  const contentPinsDeadline = Date.now() + 120_000
+  let contentPins: any[] = []
+  while (Date.now() < contentPinsDeadline) {
+    contentPins = db.query(
+      `SELECT cid, name FROM community_pins WHERE name LIKE 'post updates%' OR name LIKE 'page %' OR name LIKE 'next page %'`
+    )
+    if (contentPins.length > 0) {
+      break
+    }
+    await sleep(500)
+  }
+  assert.ok(contentPins.length > 0, 'publishing a post should make the community update track content pins')
+  assert.ok(contentPins.some(pin => pin.name.startsWith('post updates')), 'a postUpdates time bucket cid should be tracked')
+  step(`community update tracked ${contentPins.length} content pins (${contentPins.map(pin => pin.name).join(', ')})`)
+
+  // Run the real pin worker on every queued content pin op and verify the
+  // cids actually land in the daemon kubo's pinset.
+  let pinnedJobs = 0
+  let pinJob
+  while ((pinJob = pinOpQueue.claimOne('daemon-e2e-pin-worker'))) {
+    await processPinOp(pinJob)
+    pinJob.ack()
+    pinnedJobs++
+  }
+  assert.ok(pinnedJobs > 0, 'the content pins should be queued as pin-op add jobs')
+  for (const pin of contentPins) {
+    assert.deepEqual(await listPins(pin.cid), [pin.cid], `${pin.name} ${pin.cid} should be pinned`)
+  }
+  step(`pinned ${pinnedJobs} content cids through the pin worker`)
 }
 catch (error) {
   console.error(error)
