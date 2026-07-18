@@ -135,7 +135,7 @@ With a manifest configured the seeder starts an embedded libp2p/Helia node for t
 - serves checkpoint root records over libp2p-fetch to cold-joining voters (this registration is automatic on join),
 - announces its votes peer as the provider of each contest's criteria CID, checkpoint root, and chunk CIDs on the Routing V1 HTTP routers (`VOTES_HTTP_ROUTER_URLS`), which is how voters' `findProviders()` discovers it — the library's built-in announcer re-announces hourly and debounces on joins and checkpoint changes.
 
-Browser voters can only dial **WSS** (and browsers cannot dial each other — the gossipsub mesh forms through publicly dialable seeders), so the node runs **AutoTLS** ([libp2p.direct](https://libp2p.direct)): once AutoNAT confirms the machine's public address, the ACME broker issues a real TLS certificate and the node announces a browser-dialable `/dns4/<peerid>.libp2p.direct/.../tls/ws` address — no reverse proxy, no manual multiaddr config. The certificate takes a few minutes on first run (ACME + DNS propagation) and persists in `VOTES_DATASTORE_PATH` across restarts; watch the log for `AutoTLS certificate provisioned` and the announced addrs. Open `VOTES_LIBP2P_TCP_PORT` and `VOTES_LIBP2P_WS_PORT` in the firewall. Behind provider NAT (the interfaces only carry private IPs) AutoNAT may never confirm the address on its own — set `VOTES_PUBLIC_IP` so the public addrs get announced at all. `VOTES_AUTO_TLS=off` disables all of it for local testing.
+Browser voters can only dial **WSS** (and browsers cannot dial each other — the gossipsub mesh forms through publicly dialable seeders), so the node runs **AutoTLS** ([libp2p.direct](https://libp2p.direct)): the node learns its public address the same way the daemon's Kubo does (identify observed-addresses from the bootstrap connections, confirmed by AutoNAT dial-backs), then the ACME broker issues a real TLS certificate and the node announces a browser-dialable `/dns4/<peerid>.libp2p.direct/.../tls/ws` address — no reverse proxy, no manual multiaddr config. The certificate takes a few minutes on first run (ACME + DNS propagation) and persists in `VOTES_DATASTORE_PATH` across restarts; watch the log for `AutoTLS certificate provisioned` and the announced addrs. Open `VOTES_LIBP2P_TCP_PORT` and `VOTES_LIBP2P_WS_PORT` in the firewall.
 
 The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records (and the AutoTLS domain, which embeds the peer id) stay valid across restarts — treat that key file and the `votes-keychain.pass` next to it as part of the seeder's state.
 
@@ -176,8 +176,6 @@ VOTES_MANIFEST_SOURCES=/data/5chan-directory-criteria.jsonc
 VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz
 VOTES_LIBP2P_TCP_PORT=6742
 VOTES_LIBP2P_WS_PORT=6743
-VOTES_AUTO_TLS=on
-VOTES_PUBLIC_IP=203.0.113.7
 VOTES_RECONCILE_INTERVAL_MS=600000
 VOTES_CHAIN_RPC_URLS={"base":["https://mainnet.base.org"]}
 VOTES_BSO_RPC_URLS=https://eth.drpc.org,https://ethereum-rpc.publicnode.com

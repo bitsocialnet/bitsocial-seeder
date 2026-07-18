@@ -41,16 +41,6 @@ export default {
     listenHost: process.env.VOTES_LIBP2P_HOST || '0.0.0.0',
     tcpPort: Number(process.env.VOTES_LIBP2P_TCP_PORT || 6742),
     wsPort: Number(process.env.VOTES_LIBP2P_WS_PORT || 6743),
-    // AutoTLS (libp2p.direct) gets the node a real TLS certificate once AutoNAT confirms
-    // the public address, so BROWSER voters can dial the announced
-    // /dns4/<peerid>.libp2p.direct/.../tls/ws addr — no reverse proxy, no manual announce
-    // config. "off" only for local testing (plain /ws, no bootstrap, no certificate).
-    autoTls: process.env.VOTES_AUTO_TLS !== 'off',
-    // Behind provider NAT the interfaces only carry private IPs, AutoNAT may never confirm
-    // the public address on its own, and the router announcer (which drops private addrs
-    // client-side) would announce nothing: set the machine's public IP here to append it
-    // to the announced addrs explicitly.
-    publicIp: process.env.VOTES_PUBLIC_IP,
     reconcileIntervalMs: Number(process.env.VOTES_RECONCILE_INTERVAL_MS || 10 * 60 * 1000),
     // Per-chain RPC override, JSON: {"base": ["https://my-base-rpc"]}. Since pubsub-voting
     // 0.1.x RPC endpoints are the client's own setting (deliberately NOT in the criteria
