@@ -13,6 +13,7 @@ const localHostnames = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::
 let bundledDaemon: ChildProcess | undefined
 let daemonWasReady = false
 let shuttingDown = false
+let stoppingProgrammatically = false
 let shutdownHandlersInstalled = false
 let shutdownTimer: NodeJS.Timeout | undefined
 
@@ -177,6 +178,25 @@ const stopBundledDaemon = (signal: NodeJS.Signals = 'SIGINT') => {
   }
 }
 
+// Graceful programmatic stop for embedders (tests, future API use): SIGINT the
+// bundled daemon so bitsocial-cli shuts down its communities and kubo, escalate
+// to SIGKILL after the grace window. Unlike the signal-driven shutdown path,
+// this never calls process.exit — the caller decides what happens next.
+export const stopDaemon = (timeoutMs = 20000) => {
+  if (!bundledDaemon || bundledDaemon.exitCode !== null || bundledDaemon.signalCode !== null) {
+    return Promise.resolve()
+  }
+  stoppingProgrammatically = true
+  return new Promise<void>(resolve => {
+    const killTimer = setTimeout(() => stopBundledDaemon('SIGKILL'), timeoutMs)
+    bundledDaemon!.once('exit', () => {
+      clearTimeout(killTimer)
+      resolve()
+    })
+    stopBundledDaemon()
+  })
+}
+
 const installShutdownHandlers = () => {
   if (shutdownHandlersInstalled) {
     return
@@ -223,12 +243,15 @@ const startBundledDaemon = () => {
   bundledDaemon.stdout!.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
   bundledDaemon.stderr!.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
   bundledDaemon.once('error', error => {
-    if (!shuttingDown && daemonWasReady) {
+    if (!shuttingDown && !stoppingProgrammatically && daemonWasReady) {
       console.error(`bundled bitsocial daemon process error: ${error.message}`)
       process.exit(1)
     }
   })
   bundledDaemon.once('exit', (code, signal) => {
+    if (stoppingProgrammatically) {
+      return
+    }
     if (shuttingDown) {
       if (shutdownTimer) {
         clearTimeout(shutdownTimer)
