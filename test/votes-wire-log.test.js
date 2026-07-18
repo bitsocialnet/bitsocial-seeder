@@ -55,6 +55,12 @@ test('live bundles decode to WHO voted for WHAT', async () => {
   assert.ok(described.includes('at block 25557838'))
 })
 
+test('20-byte addresses log EIP-55 checksummed, matching wallet displays verbatim', async () => {
+  const address = Uint8Array.from('1243527ae488a51611c7618b4a72defbfa2c62bb'.match(/../g).map((h) => parseInt(h, 16)))
+  const bundle = dagCbor.encode({address, blockNumber: 1, signature: {signature: new Uint8Array(65), type: 'eip191'}, votes: []})
+  assert.ok((await describeLiveBundle(bundle)).includes('0x1243527aE488A51611c7618b4a72DEFbfa2C62bb'))
+})
+
 test('garbage bundles never throw on the logging path', async () => {
   const described = await describeLiveBundle(new Uint8Array([0x01, 0x02]))
   assert.match(described, /undecodable bundle/)
