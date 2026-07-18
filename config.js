@@ -2,10 +2,11 @@ export const defaultCommunityListSources = [
   'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master',
   'https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master'
 ]
-// The delegated Routing V1 HTTP routers pkc-js clients query by default; the votes library's
-// built-in announcer (PubsubVoterOptions.httpRouterUrls) announces the embedded libp2p peer
-// to the same set so voters' findProviders() can find it.
-const defaultVotesHttpRouterUrls = 'https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz'
+// The delegated Routing V1 HTTP routers pkc-js clients query by default (pkc-js schema.ts
+// httpRoutersOptions — keep in sync); the votes library's built-in announcer
+// (PubsubVoterOptions.httpRouterUrls) announces the embedded libp2p peer to the same set
+// so voters' findProviders() can find it.
+const defaultVotesHttpRouterUrls = 'https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz,https://routerofbitsocial.xyz,https://bsotracker.online'
 const parseSourceList = (value = '') => value
   .split(',')
   .map(source => source.trim())
