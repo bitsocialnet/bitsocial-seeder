@@ -1,4 +1,4 @@
-import config from '../config.js'
+import config from '../config.ts'
 const pubsubKuboRpcUrl = config.pubsubKuboRpcUrl || config.kuboRpcUrl
 import {create as createKubo} from 'kubo-rpc-client'
 import {Agent as HttpsAgent} from 'https'

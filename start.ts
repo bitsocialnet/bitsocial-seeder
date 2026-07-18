@@ -1,19 +1,19 @@
 import util from 'util'
-util.inspect.defaultOptions.depth = process.env.DEBUG_DEPTH
+util.inspect.defaultOptions.depth = process.env.DEBUG_DEPTH as any
 import 'dotenv/config'
 import yargs from 'yargs/yargs'
 import {hideBin} from 'yargs/helpers'
 const argv = yargs(hideBin(process.argv)).argv
 console.log({argv})
-import config from './config.js'
-import {db} from './lib/db.js'
-import {discoverCommunitiesFromLists} from './lib/discover-communities.js'
-import {ensureDaemon} from './lib/daemon.js'
-import seederState from './lib/seeder-state.js'
-import {checkRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.js'
+import config from './config.ts'
+import {db} from './lib/db.ts'
+import {discoverCommunitiesFromLists} from './lib/discover-communities.ts'
+import {ensureDaemon} from './lib/daemon.ts'
+import seederState from './lib/seeder-state.ts'
+import {checkRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.ts'
 
 if (!config?.seeding?.communityListSources?.length) {
-  console.log(`missing config.js 'seeding.communityListSources'`)
+  console.log(`missing config.ts 'seeding.communityListSources'`)
   process.exit()
 }
 
@@ -26,8 +26,8 @@ const {signal} = abortController
 let shuttingDown = false
 // Async teardown hooks (e.g. the votes seeder flushing its checkpoint snapshot) that should
 // finish inside the shutdown grace window; failures never block exit.
-const shutdownCleanups = []
-const shutdown = (signum) => {
+const shutdownCleanups: (() => any)[] = []
+const shutdown = (signum: string) => {
   if (shuttingDown) {
     process.exit(1)
   }
@@ -41,8 +41,8 @@ const shutdown = (signum) => {
   // Exit as soon as the cleanups settle — voter.destroy() is what flushes the debounced
   // checkpoint write, so cutting it off at a fixed sleep could lose votes on a slow disk —
   // with the grace timer as the backstop against a hung cleanup.
-  Promise.allSettled(shutdownCleanups.map(cleanup => cleanup())).then(exit, exit)
   setTimeout(exit, 5000).unref()
+  Promise.allSettled(shutdownCleanups.map(async cleanup => cleanup())).then(exit)
 }
 process.once('SIGINT', () => shutdown('SIGINT'))
 process.once('SIGTERM', () => shutdown('SIGTERM'))
@@ -52,19 +52,19 @@ process.once('SIGTERM', () => shutdown('SIGTERM'))
 // row onto that queue; a worker claims, runs the function, and acks. We use
 // maxAttempts=1 because if the tick fails the next scheduler firing re-runs
 // it anyway — no value in honker's retry/backoff path for idempotent ticks.
-const tickQueue = (name) => db.queue(name, {maxAttempts: 1, visibilityTimeoutS: 600})
+const tickQueue = (name: string) => db.queue(name, {maxAttempts: 1, visibilityTimeoutS: 600})
 
 const discoverTickQ = tickQueue('discover-tick')
 const subscribeTickQ = tickQueue('subscribe-tick')
 const pubsubTickQ = tickQueue('pubsub-tick')
 const updateCheckTickQ = tickQueue('update-check-tick')
 
-const runTickWorker = async (queue, workerId, processFn) => {
+const runTickWorker = async (queue: any, workerId: string, processFn: () => any) => {
   for await (const job of queue.claim(workerId, {signal})) {
     try {
       await processFn()
     }
-    catch (error) {
+    catch (error: any) {
       console.log(`${workerId} error: ${error?.message || error}`)
     }
     try { job.ack() } catch {}
@@ -88,7 +88,7 @@ if (config.updateCheck.enabled !== false) {
 try {
   await ensureDaemon()
 }
-catch (error) {
+catch (error: any) {
   console.error(error?.message || error)
   process.exit(1)
 }
@@ -98,7 +98,7 @@ catch (error) {
 const votesEnabled = config.votes.manifestSources.length > 0
 let votesTickQ
 if (votesEnabled) {
-  const {votesTick, destroyVotesSeeder} = await import('./lib/votes/seeder.js')
+  const {votesTick, destroyVotesSeeder} = await import('./lib/votes/seeder.ts')
   shutdownCleanups.push(destroyVotesSeeder)
   votesTickQ = tickQueue('votes-tick')
   runTickWorker(votesTickQ, 'votes-worker', () => votesTick())
@@ -116,19 +116,19 @@ discoverTickQ.enqueue({reason: 'startup'})
 // discover (e.g. network blip, GitHub rate limit) recovers on the next 10s
 // tick instead of hanging the boot. Mirrors the recovery behavior the old
 // setInterval-based discovery had before the honker migration.
-while (!seederState.communitiesSeeding) {
+while (!(seederState as {communitiesSeeding?: any[]}).communitiesSeeding) {
   console.log('no communities discovered yet, checking again in 10 seconds...')
   await new Promise(r => setTimeout(r, 10000))
   discoverTickQ.enqueue({reason: 'startup-retry'})
 }
 
-// --- seeding workers (lazy import so bitsocial.js + pkc handles initialize after daemon is ready) ---
+// --- seeding workers (lazy import so bitsocial.ts + pkc handles initialize after daemon is ready) ---
 const {
   subscribeCommunitiesUpdates,
   joinPubsubTopics,
   providePubsubTopicRoutingCids,
   spawnPinWorkers
-} = await import('./lib/seed-communities.js')
+} = await import('./lib/seed-communities.ts')
 
 runTickWorker(subscribeTickQ, 'subscribe-worker', () => subscribeCommunitiesUpdates())
   .catch(error => console.log(`subscribe worker exited: ${error?.message || error}`))
@@ -151,7 +151,7 @@ pubsubTickQ.enqueue({reason: 'startup'})
 // in _honker_scheduler_tasks keyed by name. Calling add() again with the same
 // name is a no-op, so re-registering on every startup is safe.
 const scheduler = db.scheduler()
-const everyS = (ms) => `@every ${Math.max(1, Math.floor(Number(ms) / 1000))}s`
+const everyS = (ms: any) => `@every ${Math.max(1, Math.floor(Number(ms) / 1000))}s`
 
 scheduler.add({
   name: 'discover-tick',

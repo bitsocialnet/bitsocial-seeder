@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-const writeJson = (filePath, value) => {
+const writeJson = (filePath: string, value: unknown) => {
   fs.writeFileSync(filePath, `${JSON.stringify(value)}\n`)
 }
 
@@ -38,9 +38,9 @@ test('discovers public and extra list sources end-to-end', () => {
     import assert from 'node:assert/strict'
     import fs from 'node:fs'
     const writeJson = (filePath, value) => fs.writeFileSync(filePath, \`\${JSON.stringify(value)}\\n\`)
-    const {discoverCommunitiesFromLists} = await import('./lib/discover-communities.js')
-    const {default: seederState} = await import('./lib/seeder-state.js')
-    const {db} = await import('./lib/db.js')
+    const {discoverCommunitiesFromLists} = await import('./lib/discover-communities.ts')
+    const {default: seederState} = await import('./lib/seeder-state.ts')
+    const {db} = await import('./lib/db.ts')
 
     try {
       await discoverCommunitiesFromLists()

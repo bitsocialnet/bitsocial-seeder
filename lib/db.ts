@@ -1,5 +1,5 @@
 import honker from '@russellthehippo/honker-node'
-import config from '../config.js'
+import config from '../config.ts'
 
 const {open} = honker
 

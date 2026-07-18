@@ -1,7 +1,9 @@
 import {createPublicClient, createTransport, http} from 'viem'
+import type {Chain, Transport} from 'viem'
 import * as viemChains from 'viem/chains'
 import {DEFAULT_PROVIDERS as ETH_DEFAULT_RPC_URLS} from '@bitsocial/bitsocial-cli/dist/common-utils/resolvers.js'
-import config from '../../config.js'
+import type {ChainClient, ChainClientFactory, Criteria} from '@bitsocial/pubsub-voting'
+import config from '../../config.ts'
 
 // ChainClientFactory for PubsubVoter. Since pubsub-voting 0.1.x the criteria names chains
 // by ticker + chainId only — RPC endpoints are deliberately NOT part of the criteria
@@ -19,8 +21,8 @@ import config from '../../config.js'
 // - Return undefined to recuse a chain with no RPC configured; the voter then throws
 //   MissingChainClientError at createContest instead of miscounting.
 
-const viemChainById = new Map(
-  Object.values(viemChains)
+const viemChainById = new Map<number, Chain>(
+  (Object.values(viemChains) as Chain[])
     .filter(chain => typeof chain?.id === 'number')
     .map(chain => [chain.id, chain])
 )
@@ -29,17 +31,17 @@ const viemChainById = new Map(
 // parallel querying, NOT viem's fallback() (sequential failover, where a dead first
 // URL adds its whole timeout to every request while the healthy ones sit idle). A
 // request only fails when every URL failed.
-const parallelTransport = (urls) => (opts) => {
-  const transports = urls.map(url => http(url)(opts))
+const parallelTransport = (urls: string[]): Transport => (opts: any) => {
+  const transports = urls.map((url: string) => http(url)(opts))
   return createTransport({
     key: 'parallel',
     name: `parallel(${urls.join(' ')})`,
     type: 'parallel',
     async request(args) {
       try {
-        return await Promise.any(transports.map(transport => transport.request(args)))
+        return await Promise.any(transports.map((transport: any) => transport.request(args)))
       }
-      catch (error) {
+      catch (error: any) {
         // AggregateError (all URLs failed) → surface a real per-URL error, not the wrapper.
         throw error.errors?.[0] ?? error
       }
@@ -47,9 +49,9 @@ const parallelTransport = (urls) => (opts) => {
   })
 }
 
-const clients = new Map() // chainId → ChainClient
+const clients = new Map<number, ChainClient>() // chainId → ChainClient
 
-export const chainClientFactory = ({chain: chainTicker, chainId}) => {
+export const chainClientFactory: ChainClientFactory = ({chain: chainTicker, chainId}) => {
   if (clients.has(chainId)) {
     return clients.get(chainId)
   }
@@ -57,11 +59,11 @@ export const chainClientFactory = ({chain: chainTicker, chainId}) => {
   const overrideUrls = config.votes.chainRpcUrls?.[chainTicker]
   let urls = Array.isArray(overrideUrls) ? overrideUrls.filter(Boolean) : []
   if (urls.length === 0 && chainId === 1) {
-    // ETH mainnet default: the same public RPC list bitsocial-cli hardcodes for pkc-js
-    // name resolution — battle-tested endpoints, NOT viem's single default RPC (which
-    // has already been unreachable from a production host and silently killed all
-    // vote verification once).
-    urls = [...ETH_DEFAULT_RPC_URLS]
+    // ETH mainnet default: the operator's VOTES_ETH_RPC_URLS (the same URLs .bso name
+    // resolution uses), else the public RPC list bitsocial-cli hardcodes for pkc-js —
+    // battle-tested endpoints, NOT viem's single default RPC (which has already been
+    // unreachable from a production host and silently killed all vote verification once).
+    urls = config.votes.ethRpcUrls.length > 0 ? [...config.votes.ethRpcUrls] : [...ETH_DEFAULT_RPC_URLS]
   }
   if (!chain && urls.length === 0) {
     // Unknown chain and no operator-configured RPC: recuse rather than miscount.
@@ -83,10 +85,10 @@ export const chainClientFactory = ({chain: chainTicker, chainId}) => {
 // the seeder looks healthy while counting nothing (this exact thing shipped once: viem
 // mainnet's default RPC was unreachable from the host and every vote vanished without a
 // log line). Probe every chain the joined contests require and log status CHANGES loudly.
-const chainHealth = new Map() // chainId → 'ok' | 'failed' | 'unconfigured'
+const chainHealth = new Map<number, string>() // chainId → 'ok' | 'failed' | 'unconfigured'
 
-export const checkChainClients = async (criteriaList, log = console.log) => {
-  const chains = new Map() // chainId → ticker
+export const checkChainClients = async (criteriaList: Criteria[], log = console.log) => {
+  const chains = new Map<number, string>() // chainId → ticker
   for (const criteria of criteriaList) {
     for (const [ticker, chainConfig] of Object.entries(criteria.requires?.chains ?? {})) {
       chains.set(chainConfig.chainId, ticker)
@@ -105,7 +107,7 @@ export const checkChainClients = async (criteriaList, log = console.log) => {
         status = 'ok'
       }
     }
-    catch (error) {
+    catch (error: any) {
       status = 'failed'
       detail = error?.shortMessage || error?.message || String(error)
     }

@@ -1,11 +1,12 @@
 import pLimit from 'p-limit'
 import {createBsoResolvers} from '@bitsocial/bitsocial-cli/dist/common-utils/resolvers.js'
 import {PubsubVoter, criteriaCid, TOPIC_PREFIX} from '@bitsocial/pubsub-voting'
-import config from '../../config.js'
-import {createVotesNode} from './node.js'
-import {chainClientFactory, checkChainClients} from './chains.js'
-import {loadVotesCriteria} from './manifest.js'
-import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGossipMessage} from './wire-log.js'
+import type {Contest, Criteria} from '@bitsocial/pubsub-voting'
+import config from '../../config.ts'
+import {createVotesNode} from './node.ts'
+import {chainClientFactory, checkChainClients} from './chains.ts'
+import {loadVotesCriteria} from './manifest.ts'
+import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGossipMessage} from './wire-log.ts'
 
 // Seed pubsub-voting contests: derive every configured directory manifest into criteria
 // documents, join each contest read-only (no signer), and keep the set reconciled. Joining is
@@ -16,33 +17,35 @@ import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGoss
 // (httpRouterUrls) keeps this peer registered as each contest's provider on the HTTP routers
 // (hourly, debounced on joins and checkpoint changes).
 
-const logErrorMessage = (prefix) => (error) => console.log(`${prefix} votes error: ${error?.message || error}`)
+const logErrorMessage = (prefix: string) => (error: any) => console.log(`${prefix} votes error: ${error?.message || error}`)
+
+type ContestEntry = {contest: Contest, criteria: Criteria, updated: boolean, lastLoggedAt: number}
 
 // Runtime-only handles, like communitiesUpdating: live network state that is rebuilt from the
 // manifests on every tick, not persisted.
-const contestsSeeding = new Map() // criteriaCid string → {contest, criteria, updated, lastLoggedAt}
-const manifestCache = []
-let helia
-let voter
+const contestsSeeding = new Map<string, ContestEntry>() // criteriaCid string → {contest, criteria, updated, lastLoggedAt}
+const manifestCache: Criteria[][] = []
+let helia: any
+let voter: PubsubVoter | undefined
 
 const updateLimit = pLimit(Math.max(1, Number(config.votes.updateConcurrency) || 8))
 
 // Answers the questions production debugging actually asks — "did that voter ever reach
 // us, join the topic, and pull the checkpoint?" — from the log alone. Byte counts are
-// decoded through wire-log.js (a root heartbeat is constant-size regardless of votes;
+// decoded through wire-log.ts (a root heartbeat is constant-size regardless of votes;
 // only `count` distinguishes an empty contest from a broken checkpoint).
-const addNodeDiagnostics = (helia) => {
+const addNodeDiagnostics = (helia: any) => {
   const {libp2p} = helia
-  libp2p.addEventListener('connection:open', (evt) => {
+  libp2p.addEventListener('connection:open', (evt: any) => {
     const {remotePeer, remoteAddr} = evt.detail
     console.log(`votes conn open: ${remotePeer} via ${remoteAddr} (${libp2p.getConnections().length} conns)`)
   })
-  libp2p.addEventListener('connection:close', (evt) => {
+  libp2p.addEventListener('connection:close', (evt: any) => {
     const {remotePeer, remoteAddr} = evt.detail
     console.log(`votes conn close: ${remotePeer} via ${remoteAddr} (${libp2p.getConnections().length} conns)`)
   })
   const pubsub = libp2p.services.pubsub
-  pubsub.addEventListener('subscription-change', (evt) => {
+  pubsub.addEventListener('subscription-change', (evt: any) => {
     for (const sub of evt.detail.subscriptions) {
       if (!sub.topic.startsWith(TOPIC_PREFIX)) {
         continue
@@ -55,7 +58,7 @@ const addNodeDiagnostics = (helia) => {
   // log them only when a peer's observed root CHANGES — a changing or diverging peer root
   // is the anti-entropy signal worth seeing (peer has bundles we don't, or vice versa).
   const lastPeerRoots = new Map() // topic → last observed peer root CID string
-  pubsub.addEventListener('message', (evt) => {
+  pubsub.addEventListener('message', (evt: any) => {
     if (!evt.detail.topic.startsWith(TOPIC_PREFIX)) {
       return
     }
@@ -82,8 +85,8 @@ const addNodeDiagnostics = (helia) => {
   // as one "fetch serve" line.
   const fetchService = libp2p.services.fetch
   const realRegister = fetchService.registerLookupFunction.bind(fetchService)
-  fetchService.registerLookupFunction = (prefix, lookup) => {
-    realRegister(prefix, async (key) => {
+  fetchService.registerLookupFunction = (prefix: any, lookup: any) => {
+    realRegister(prefix, async (key: any) => {
       const value = await lookup(key)
       console.log(`votes fetch serve: ${new TextDecoder().decode(key)} → ${value === undefined ? 'no value' : `${value.length} bytes: ${describeRootRecord(value)}`}`)
       return value
@@ -101,10 +104,10 @@ const ensureVoter = async () => {
     helia,
     chains: chainClientFactory,
     // The same .bso resolvers the daemon's pkc-js uses (bitsocial-cli's default provider
-    // list unless VOTES_BSO_RPC_URLS overrides): votes carry community names, and a bundle
+    // list unless VOTES_ETH_RPC_URLS overrides): votes carry community names, and a bundle
     // whose name cannot be verified is never counted, so a seeder without working
     // resolvers serves next to nothing.
-    nameResolvers: createBsoResolvers(config.votes.bsoRpcUrls),
+    nameResolvers: createBsoResolvers(config.votes.ethRpcUrls),
     dataPath: config.votes.dataPath,
     httpRouterUrls: config.votes.httpRouterUrls
     // no signer: a seeder is read-only
@@ -124,7 +127,7 @@ const ensureVoter = async () => {
   return voter
 }
 
-const logContestUpdate = (entry) => {
+const logContestUpdate = (entry: ContestEntry) => {
   // Tally updates arrive in bursts (cold-join settlement, gossip); one line per contest per
   // minute is enough operational signal.
   if (Date.now() - (entry.lastLoggedAt || 0) < 60_000) {
@@ -136,8 +139,8 @@ const logContestUpdate = (entry) => {
   console.log(`votes /${entry.criteria.contestId}/ tally updated, top: ${label}`)
 }
 
-const joinContest = async (cidString, criteria) => {
-  const contest = await voter.createContest({criteria})
+const joinContest = async (cidString: string, criteria: Criteria) => {
+  const contest = await voter!.createContest({criteria})
   const entry = {contest, criteria, updated: false, lastLoggedAt: 0}
   contest.on('update', () => logContestUpdate(entry))
   contest.on('error', logErrorMessage(`/${criteria.contestId}/`))
@@ -159,7 +162,7 @@ export const votesTick = async () => {
 
   // Key every contest by its criteria CID (the topic identity) and drop duplicates across
   // manifest sources: same document = same topic = one contest.
-  const desired = new Map()
+  const desired = new Map<string, Criteria>()
   for (const criteria of allCriteria) {
     const cid = await criteriaCid(criteria)
     desired.set(cid.toString(), criteria)
@@ -189,10 +192,10 @@ export const votesTick = async () => {
       }
       continue
     }
-    joins.push(updateLimit(() => joinContest(cidString, criteria)).catch((error) => {
-      contestsSeeding.delete(cidString)
-      logErrorMessage(`/${criteria.contestId}/`)(error)
-    }))
+    // Keep the entry on failure: joinContest registered it with updated:false before
+    // update(), so the retry branch above re-runs the idempotent update() next tick —
+    // deleting it would re-createContest a contest that was never stopped.
+    joins.push(updateLimit(() => joinContest(cidString, criteria)).catch(logErrorMessage(`/${criteria.contestId}/`)))
   }
   await Promise.all(joins)
   console.log(`seeding ${contestsSeeding.size} votes contests`)
@@ -202,7 +205,7 @@ export const votesTick = async () => {
   await checkChainClients(allCriteria).catch(logErrorMessage('chain health'))
 }
 
-// voter.destroy() is what flushes the debounced checkpoint-snapshot write — start.js awaits
+// voter.destroy() is what flushes the debounced checkpoint-snapshot write — start.ts awaits
 // these cleanups (racing the shutdown grace window) so a restart doesn't lose the tally.
 export const destroyVotesSeeder = async () => {
   try {

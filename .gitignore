@@ -7,8 +7,9 @@ seeder.db-wal
 seeder.db-shm
 .env
 bin/*
-!bin/bitsocial-seeder.js
+!bin/bitsocial-seeder.ts
 node_modules
 TODO.md
 .plebbit
 .bitsocial
+dist

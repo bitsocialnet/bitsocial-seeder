@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    // Source imports use .ts specifiers so Node >=24 runs the files directly
+    // (type stripping); tsc rewrites them to .js when emitting dist for npm.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    // Node's type stripping only supports erasable syntax (no enums,
+    // namespaces, parameter properties) — have tsc enforce that.
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true
+  },
+  "include": ["start.ts", "config.ts", "bin", "lib", "test", "scripts", "types"],
+  "exclude": ["node_modules", "dist"]
+}

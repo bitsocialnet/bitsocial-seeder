@@ -16,7 +16,7 @@ const registryBaseUrl = 'https://registry.npmjs.org'
 
 const normalizeVersion = (version = '') => version.replace(/^v/i, '')
 
-export const compareVersions = (a, b) => {
+export const compareVersions = (a: string, b: string) => {
   const partsA = normalizeVersion(a).split('.')
   const partsB = normalizeVersion(b).split('.')
   const length = Math.max(partsA.length, partsB.length)
@@ -53,7 +53,7 @@ export const fetchLatestVersion = async ({
   if (!response.ok) {
     throw Error(`npm registry returned ${response.status}`)
   }
-  const metadata = await response.json()
+  const metadata: any = await response.json()
   if (typeof metadata.version !== 'string') {
     throw Error('npm registry response did not include a version')
   }
@@ -64,7 +64,7 @@ export const getUpdateMessage = ({
   currentVersion = CURRENT_VERSION,
   latestVersion,
   packageName = PACKAGE_NAME
-} = {}) => {
+}: {currentVersion?: string, latestVersion?: string, packageName?: string} = {}) => {
   if (!latestVersion || compareVersions(latestVersion, currentVersion) <= 0) {
     return
   }
@@ -77,7 +77,7 @@ export const getRuntimeDependencyUpdateMessage = ({
   latestVersion,
   packageName,
   seederPackageName = PACKAGE_NAME
-} = {}) => {
+}: {currentVersion?: string, latestVersion?: string, packageName?: string, seederPackageName?: string} = {}) => {
   if (!latestVersion || !currentVersion || compareVersions(latestVersion, currentVersion) <= 0) {
     return
   }
@@ -95,7 +95,7 @@ export const checkRuntimeDependencyUpdates = async ({
   logger = console,
   fetchImpl = fetch
 } = {}) => {
-  const results = []
+  const results: any[] = []
   for (const dependency of dependencies) {
     const latestVersion = await fetchLatestVersion({
       packageName: dependency.packageName,
@@ -134,6 +134,6 @@ export const checkForUpdate = async ({
   return {latestVersion, message}
 }
 
-// Scheduling is owned by start.js via honker's scheduler; this module just
+// Scheduling is owned by start.ts via honker's scheduler; this module just
 // exposes the helpers (`checkForUpdate`, `fetchLatestVersion`, etc.) that the
 // scheduler worker runs on tick.

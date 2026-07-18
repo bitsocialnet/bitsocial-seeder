@@ -139,7 +139,7 @@ Browser voters can only dial **WSS** (and browsers cannot dial each other — th
 
 The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records (and the AutoTLS domain, which embeds the peer id) stay valid across restarts — treat that key file and the `votes-keychain.pass` next to it as part of the seeder's state.
 
-Chain verification reads each contest's gate rule on-chain. Since pubsub-voting 0.1.x the criteria document names chains by ticker + chainId only — RPC endpoints are each client's own setting (so operators can swap endpoints without forking topics). Multiple URLs per chain are queried **in parallel** (every request races all endpoints, first success wins — a dead RPC costs nothing); ETH mainnet defaults to the same six public RPCs bitsocial-cli hardcodes for pkc-js, other chains default to their viem chain's public RPC, and a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker, e.g. `{"base":["https://my-base-rpc"]}`) at its own. Votes carry community names whose claims are verified through `.bso` resolution — the seeder uses the same default resolver providers bitsocial-cli gives pkc-js unless `VOTES_BSO_RPC_URLS` overrides them; a seeder whose resolvers are down counts (and therefore serves) almost nothing.
+Chain verification reads each contest's gate rule on-chain. Since pubsub-voting 0.1.x the criteria document names chains by ticker + chainId only — RPC endpoints are each client's own setting (so operators can swap endpoints without forking topics). Multiple URLs per chain are queried **in parallel** (every request races all endpoints, first success wins — a dead RPC costs nothing); ETH mainnet defaults to the same six public RPCs bitsocial-cli hardcodes for pkc-js, other chains default to their viem chain's public RPC, and a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker, e.g. `'{"base":["https://my-base-rpc"]}'`) at its own. Votes carry community names whose claims are verified through `.bso` resolution (an ETH mainnet read) — `VOTES_ETH_RPC_URLS` sets the ETH mainnet RPCs used for both name resolution and eth-gated contest verification (an explicit `VOTES_CHAIN_RPC_URLS` `"eth"` entry still wins for verification), defaulting to the same resolver providers bitsocial-cli gives pkc-js; a seeder whose resolvers are down counts (and therefore serves) almost nothing.
 
 The log answers the questions production debugging asks — did a voter ever connect (`votes conn open`), join a topic (`votes topic subscribe`), pull the checkpoint (`votes fetch serve`, with the decoded bundle count — a root record is constant-size whether the contest is empty or not, so only the decoded `count` distinguishes "no votes" from "checkpoint didn't load"), or publish a vote (`votes gossip ... live vote bundle`)?
 
@@ -177,8 +177,8 @@ VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.
 VOTES_LIBP2P_TCP_PORT=6742
 VOTES_LIBP2P_WS_PORT=6743
 VOTES_RECONCILE_INTERVAL_MS=600000
-VOTES_CHAIN_RPC_URLS={"base":["https://mainnet.base.org"]}
-VOTES_BSO_RPC_URLS=https://eth.drpc.org,https://ethereum-rpc.publicnode.com
+VOTES_CHAIN_RPC_URLS='{"base":["https://mainnet.base.org"]}'
+VOTES_ETH_RPC_URLS=https://eth.drpc.org,https://ethereum-rpc.publicnode.com
 VOTES_PEER_KEY_PATH=/data/votes-peer.key
 VOTES_BLOCKSTORE_PATH=/data/votes-blockstore
 VOTES_DATASTORE_PATH=/data/votes-datastore

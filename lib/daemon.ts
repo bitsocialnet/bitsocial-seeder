@@ -1,21 +1,22 @@
 import {spawn} from 'node:child_process'
+import type {ChildProcess} from 'node:child_process'
 import {createRequire} from 'node:module'
 import net from 'node:net'
-import config from '../config.js'
-import {warnIfExistingDaemonMayBeStale} from './external-daemon-version.js'
+import config from '../config.ts'
+import {warnIfExistingDaemonMayBeStale} from './external-daemon-version.ts'
 
 const require = createRequire(import.meta.url)
 const bitsocialBinPath = () => require.resolve('@bitsocial/bitsocial-cli/bin/run')
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const localHostnames = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'])
 
-let bundledDaemon
+let bundledDaemon: ChildProcess | undefined
 let daemonWasReady = false
 let shuttingDown = false
 let shutdownHandlersInstalled = false
-let shutdownTimer
+let shutdownTimer: NodeJS.Timeout | undefined
 
-const parseUrl = (urlString) => {
+const parseUrl = (urlString: string) => {
   try {
     return new URL(urlString)
   }
@@ -24,14 +25,14 @@ const parseUrl = (urlString) => {
   }
 }
 
-const getUrlPort = (url) => {
+const getUrlPort = (url: URL) => {
   if (url.port) {
     return Number(url.port)
   }
   return url.protocol === 'https:' || url.protocol === 'wss:' ? 443 : 80
 }
 
-const getConnectHost = (hostname) => {
+const getConnectHost = (hostname: string) => {
   const normalized = hostname.replace(/^\[|\]$/g, '')
   if (normalized === 'localhost' || normalized === '0.0.0.0') {
     return '127.0.0.1'
@@ -39,12 +40,12 @@ const getConnectHost = (hostname) => {
   return normalized
 }
 
-export const isLocalDaemonUrl = (urlString) => {
+export const isLocalDaemonUrl = (urlString: string) => {
   const url = parseUrl(urlString)
   return Boolean(url && localHostnames.has(url.hostname))
 }
 
-export const buildDaemonArgs = ({pkcRpcUrl, dataPath, logPath}) => {
+export const buildDaemonArgs = ({pkcRpcUrl, dataPath, logPath}: {pkcRpcUrl: string, dataPath?: string, logPath?: string}) => {
   const args = [bitsocialBinPath(), 'daemon', '--pkcRpcUrl', pkcRpcUrl]
   if (dataPath) {
     args.push('--pkcOptions.dataPath', dataPath)
@@ -55,16 +56,16 @@ export const buildDaemonArgs = ({pkcRpcUrl, dataPath, logPath}) => {
   return args
 }
 
-export const isTcpEndpointReachable = (urlString, timeoutMs = 1000) => {
+export const isTcpEndpointReachable = (urlString: string, timeoutMs = 1000) => {
   const url = parseUrl(urlString)
   const port = url && getUrlPort(url)
   if (!url || !Number.isFinite(port)) {
     return Promise.resolve(false)
   }
 
-  return new Promise(resolve => {
-    const socket = net.connect({host: getConnectHost(url.hostname), port, timeout: timeoutMs})
-    const finish = (reachable) => {
+  return new Promise<boolean>(resolve => {
+    const socket = net.connect({host: getConnectHost(url.hostname), port: port as number, timeout: timeoutMs})
+    const finish = (reachable: boolean) => {
       socket.destroy()
       resolve(reachable)
     }
@@ -74,16 +75,16 @@ export const isTcpEndpointReachable = (urlString, timeoutMs = 1000) => {
   })
 }
 
-export const isPkcRpcReady = (urlString, timeoutMs = 2000) => {
+export const isPkcRpcReady = (urlString: string, timeoutMs = 2000) => {
   const url = parseUrl(urlString)
   if (!url || typeof WebSocket !== 'function') {
     return Promise.resolve(false)
   }
 
-  return new Promise(resolve => {
+  return new Promise<boolean>(resolve => {
     let settled = false
-    let socket
-    const finish = (ready) => {
+    let socket: WebSocket | undefined
+    const finish = (ready: boolean) => {
       if (settled) {
         return
       }
@@ -100,7 +101,7 @@ export const isPkcRpcReady = (urlString, timeoutMs = 2000) => {
     try {
       socket = new WebSocket(urlString)
       socket.addEventListener('open', () => {
-        socket.send(JSON.stringify({
+        socket!.send(JSON.stringify({
           jsonrpc: '2.0',
           id: 1,
           method: 'communitiesSubscribe',
@@ -126,7 +127,7 @@ export const isPkcRpcReady = (urlString, timeoutMs = 2000) => {
   })
 }
 
-export const isKuboRpcReachable = async (urlString, timeoutMs = 1000) => {
+export const isKuboRpcReachable = async (urlString: string, timeoutMs = 1000) => {
   const url = parseUrl(urlString)
   if (!url) {
     return false
@@ -160,7 +161,7 @@ export const checkDaemonEndpoints = async () => {
   }
 }
 
-const prefixOutput = (prefix, chunk) => {
+const prefixOutput = (prefix: string, chunk: Buffer) => {
   const text = chunk.toString()
   process.stdout.write(text.split('\n').map((line, index, lines) => {
     if (index === lines.length - 1 && line === '') {
@@ -170,7 +171,7 @@ const prefixOutput = (prefix, chunk) => {
   }).join('\n'))
 }
 
-const stopBundledDaemon = (signal = 'SIGINT') => {
+const stopBundledDaemon = (signal: NodeJS.Signals = 'SIGINT') => {
   if (bundledDaemon && !bundledDaemon.killed) {
     bundledDaemon.kill(signal)
   }
@@ -181,7 +182,7 @@ const installShutdownHandlers = () => {
     return
   }
   shutdownHandlersInstalled = true
-  const shutdown = (signal) => {
+  const shutdown = (signal: NodeJS.Signals) => {
     if (shuttingDown) {
       process.exit(1)
     }
@@ -219,8 +220,8 @@ const startBundledDaemon = () => {
     env,
     stdio: ['ignore', 'pipe', 'pipe']
   })
-  bundledDaemon.stdout.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
-  bundledDaemon.stderr.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
+  bundledDaemon.stdout!.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
+  bundledDaemon.stderr!.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
   bundledDaemon.once('error', error => {
     if (!shuttingDown && daemonWasReady) {
       console.error(`bundled bitsocial daemon process error: ${error.message}`)
@@ -244,11 +245,11 @@ const startBundledDaemon = () => {
   return bundledDaemon
 }
 
-const waitForDaemon = async (daemonProcess, timeoutMs) => {
+const waitForDaemon = async (daemonProcess: ChildProcess | undefined, timeoutMs: number) => {
   const deadline = Date.now() + timeoutMs
-  let exit
-  let processError
-  let readySince
+  let exit: {code: number | null, signal: NodeJS.Signals | null} | undefined
+  let processError: Error | undefined
+  let readySince: number | undefined
   daemonProcess?.once('error', error => {
     processError = error
   })

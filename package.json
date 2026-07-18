@@ -15,15 +15,12 @@
   "engines": {
     "node": ">=24"
   },
-  "main": "start.js",
+  "main": "dist/start.js",
   "bin": {
-    "bitsocial-seeder": "bin/bitsocial-seeder.js"
+    "bitsocial-seeder": "dist/bin/bitsocial-seeder.js"
   },
   "files": [
-    "bin",
-    "config.js",
-    "lib",
-    "start.js",
+    "dist",
     "README.md",
     "LICENSE"
   ],
@@ -31,10 +28,13 @@
     "access": "public"
   },
   "scripts": {
-    "changelog": "node scripts/generate-changelog.mjs",
-    "changelog:release-notes": "node scripts/changelog-release-notes.mjs",
-    "start": "node start.js",
-    "test": "node --test"
+    "build": "tsc -p tsconfig.build.json",
+    "changelog": "node scripts/generate-changelog.mts",
+    "changelog:release-notes": "node scripts/changelog-release-notes.mts",
+    "prepack": "npm run build",
+    "start": "node start.ts",
+    "test": "npm run typecheck && node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bitsocial/bitsocial-cli": "0.19.84",
@@ -77,5 +77,9 @@
   "optionalDependencies": {
     "bufferutil": "4.1.0",
     "utf-8-validate": "6.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2"
   }
 }

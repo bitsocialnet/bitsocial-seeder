@@ -29,6 +29,16 @@ services:
       MAX_COMMUNITIES: "${MAX_COMMUNITIES:-}"
       VOTES_MANIFEST_SOURCES: "${VOTES_MANIFEST_SOURCES:-}"
       VOTES_CHAIN_RPC_URLS: "${VOTES_CHAIN_RPC_URLS:-}"
+      VOTES_ETH_RPC_URLS: "${VOTES_ETH_RPC_URLS:-}"
+      # Compose only passes host env vars that are declared here, so every documented
+      # VOTES_* override must be forwarded explicitly (empty falls through to the default).
+      VOTES_HTTP_ROUTER_URLS: "${VOTES_HTTP_ROUTER_URLS:-}"
+      VOTES_LIBP2P_HOST: "${VOTES_LIBP2P_HOST:-}"
+      VOTES_LIBP2P_TCP_PORT: "${VOTES_LIBP2P_TCP_PORT:-}"
+      VOTES_LIBP2P_WS_PORT: "${VOTES_LIBP2P_WS_PORT:-}"
+      VOTES_RECONCILE_INTERVAL_MS: "${VOTES_RECONCILE_INTERVAL_MS:-}"
+      VOTES_FETCH_MAX_STREAMS: "${VOTES_FETCH_MAX_STREAMS:-}"
+      VOTES_UPDATE_CONCURRENCY: "${VOTES_UPDATE_CONCURRENCY:-}"
       VOTES_PEER_KEY_PATH: /data/votes-peer.key
       VOTES_BLOCKSTORE_PATH: /data/votes-blockstore
       VOTES_DATASTORE_PATH: /data/votes-datastore

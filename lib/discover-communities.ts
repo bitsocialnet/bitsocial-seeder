@@ -1,19 +1,21 @@
-import config from '../config.js'
-import {extractCommunityEntries, fetchCommunityListSource, getCommunityKey} from './utils.js'
-import seederState from './seeder-state.js'
+import config from '../config.ts'
+import {extractCommunityEntries, fetchCommunityListSource, getCommunityKey} from './utils.ts'
+import seederStateModule from './seeder-state.ts'
 import 'dotenv/config'
 
-const communityLists = []
-const extraCommunityLists = []
+const seederState = seederStateModule as {communitiesSeeding?: any[]}
 
-const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
+const communityLists: any[] = []
+const extraCommunityLists: any[] = []
 
-const fetchConfiguredCommunityLists = async (sources, cache, label) => {
+const isFiniteNumber = (value: any) => typeof value === 'number' && Number.isFinite(value)
+
+const fetchConfiguredCommunityLists = async (sources: string[], cache: any[], label: string) => {
   if (sources.length === 0) {
     return cache.filter(Boolean)
   }
 
-  const promises = await Promise.allSettled(sources.map(source => fetchCommunityListSource(source)))
+  const promises: {status: string, value?: any, reason?: any}[] = await Promise.allSettled(sources.map(source => fetchCommunityListSource(source)))
   for (const [i, {status, value: communityList, reason}] of promises.entries()) {
     if (status === 'fulfilled') {
       cache[i] = communityList
@@ -26,7 +28,7 @@ const fetchConfiguredCommunityLists = async (sources, cache, label) => {
   return cache.filter(Boolean)
 }
 
-const mergeCommunityLists = (lists) => {
+const mergeCommunityLists = (lists: any[]) => {
   const communitiesMap = new Map()
   for (const communityList of lists) {
     if (!communityList) {
@@ -40,7 +42,7 @@ const mergeCommunityLists = (lists) => {
   return [...communitiesMap.values()]
 }
 
-export const mergeDiscoveredCommunities = ({communityLists, extraCommunityLists, maxCommunities}) => {
+export const mergeDiscoveredCommunities = ({communityLists, extraCommunityLists, maxCommunities}: {communityLists: any[], extraCommunityLists: any[], maxCommunities?: any}) => {
   const publicCommunities = mergeCommunityLists(communityLists)
   const limitedPublicCommunities = isFiniteNumber(maxCommunities)
     ? publicCommunities.slice(0, Math.max(0, maxCommunities))

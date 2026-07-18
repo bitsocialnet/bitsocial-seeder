@@ -4,16 +4,16 @@ import * as dagCbor from '@ipld/dag-cbor'
 import {CID} from 'multiformats/cid'
 import {sha256} from 'multiformats/hashes/sha2'
 import {base58btc} from 'multiformats/bases/base58'
-import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGossipMessage} from '../lib/votes/wire-log.js'
+import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGossipMessage} from '../lib/votes/wire-log.ts'
 
 // The wire shapes decoded here are canonical dag-cbor layouts pinned by fixed upstream
 // test vectors in @bitsocial/pubsub-voting — a change there is a breaking wire change.
 // These tests pin OUR decode side: the log must say who voted for what, and never throw
 // on garbage (it is a logging path).
 
-const someCid = async (label) => CID.createV1(dagCbor.code, await sha256.digest(new TextEncoder().encode(label)))
+const someCid = async (label: string) => CID.createV1(dagCbor.code, await sha256.digest(new TextEncoder().encode(label)))
 
-const wireBundle = (votes) => dagCbor.encode({
+const wireBundle = (votes: any[]) => dagCbor.encode({
   address: new Uint8Array([0xc4, 0x7d, 0x56, 0xe5]),
   blockNumber: 25557838,
   signature: {signature: new Uint8Array(65), type: 'eip191'},
@@ -56,7 +56,7 @@ test('live bundles decode to WHO voted for WHAT', async () => {
 })
 
 test('20-byte addresses log EIP-55 checksummed, matching wallet displays verbatim', async () => {
-  const address = Uint8Array.from('1243527ae488a51611c7618b4a72defbfa2c62bb'.match(/../g).map((h) => parseInt(h, 16)))
+  const address = Uint8Array.from('1243527ae488a51611c7618b4a72defbfa2c62bb'.match(/../g)!.map((h) => parseInt(h, 16)))
   const bundle = dagCbor.encode({address, blockNumber: 1, signature: {signature: new Uint8Array(65), type: 'eip191'}, votes: []})
   assert.ok((await describeLiveBundle(bundle)).includes('0x1243527aE488A51611c7618b4a72DEFbfa2C62bb'))
 })

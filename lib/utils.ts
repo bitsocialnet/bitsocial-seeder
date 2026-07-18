@@ -2,7 +2,7 @@ import {stripHtml} from 'string-strip-html'
 import fs from 'fs'
 import path from 'path'
 
-export const fetchJson = async (url, options) => {
+export const fetchJson = async (url: string, options?: any) => {
   const headers = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
@@ -23,10 +23,10 @@ export const fetchJson = async (url, options) => {
   }
 }
 
-const isHttpUrl = (source) => source.startsWith('http://') || source.startsWith('https://')
+const isHttpUrl = (source: string) => source.startsWith('http://') || source.startsWith('https://')
 const isJsonFileName = (name = '') => name.endsWith('.json')
 
-const normalizeCommunityEntry = (entry) => {
+const normalizeCommunityEntry = (entry: any) => {
   if (!entry || typeof entry !== 'object') {
     return
   }
@@ -42,7 +42,7 @@ const normalizeCommunityEntry = (entry) => {
   }
 }
 
-export const extractCommunityEntries = (list) => {
+export const extractCommunityEntries = (list: any) => {
   const rawEntries = list?.communities || list?.subplebbits || list?.boards || []
   if (!Array.isArray(rawEntries)) {
     return []
@@ -50,10 +50,10 @@ export const extractCommunityEntries = (list) => {
   return rawEntries.map(normalizeCommunityEntry).filter(Boolean)
 }
 
-const fetchNestedCommunityLists = async (source, entries) => {
+const fetchNestedCommunityLists = async (source: string, entries: any[]) => {
   const jsonEntries = entries.filter(entry => entry?.type === 'file' && entry?.download_url && isJsonFileName(entry.name) && !entry.name.endsWith('-defaults.json'))
   const settled = await Promise.allSettled(jsonEntries.map(entry => fetchCommunityListSource(entry.download_url)))
-  const communities = []
+  const communities: any[] = []
   for (const [i, result] of settled.entries()) {
     const entry = jsonEntries[i]
     if (result.status === 'fulfilled') {
@@ -69,11 +69,11 @@ const fetchNestedCommunityLists = async (source, entries) => {
   }
 }
 
-export const fetchCommunityListSource = async (source) => {
+export const fetchCommunityListSource = async (source: string): Promise<any> => {
   if (!isHttpUrl(source)) {
     const stat = fs.statSync(source)
     if (stat.isDirectory()) {
-      const communities = []
+      const communities: any[] = []
       for (const fileName of fs.readdirSync(source).filter(isJsonFileName)) {
         const filePath = path.join(source, fileName)
         communities.push(...extractCommunityEntries(JSON.parse(fs.readFileSync(filePath, 'utf8'))))
@@ -88,7 +88,7 @@ export const fetchCommunityListSource = async (source) => {
   try {
     list = await fetchJson(source)
   }
-  catch (e) {
+  catch (e: any) {
     throw Error(`failed fetching community list source '${source}': ${e.message}`)
   }
 
@@ -102,10 +102,10 @@ export const fetchCommunityListSource = async (source) => {
   return list
 }
 
-export const getCommunityKey = (community) => community.publicKey || community.address
+export const getCommunityKey = (community: any) => community.publicKey || community.address
 
-export const getCommunityLookup = (community) => {
-  const lookup = {}
+export const getCommunityLookup = (community: any) => {
+  const lookup: {address?: string, publicKey?: string} = {}
   if (community.address) {
     lookup.address = community.address
   }
@@ -119,4 +119,4 @@ import TimeAgo from 'javascript-time-ago'
 import en from 'javascript-time-ago/locale/en'
 TimeAgo.addDefaultLocale(en)
 const timeAgo = new TimeAgo('en-US')
-export const getTimeAgo = (timestampSeconds) => timestampSeconds ? timeAgo.format(timestampSeconds * 1000) : 'never'
+export const getTimeAgo = (timestampSeconds?: number | null) => timestampSeconds ? timeAgo.format(timestampSeconds * 1000) : 'never'

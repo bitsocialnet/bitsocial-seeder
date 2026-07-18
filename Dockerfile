@@ -40,4 +40,4 @@ VOLUME ["/data"]
 USER node
 
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "start.js"]
+CMD ["node", "start.ts"]

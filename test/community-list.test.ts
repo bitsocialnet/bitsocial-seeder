@@ -3,23 +3,23 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import {defaultCommunityListSources} from '../config.js'
-import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.js'
-import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.js'
+import {defaultCommunityListSources} from '../config.ts'
+import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.ts'
+import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.ts'
 import {
   getBitsocialCliPathCandidates,
   getBitsocialCliVersionFromCommandLineArgs,
   getExistingDaemonVersionWarning,
   isSamePkcRpcUrl
-} from '../lib/external-daemon-version.js'
-import {isAlreadyPinnedError} from '../lib/kubo-errors.js'
+} from '../lib/external-daemon-version.ts'
+import {isAlreadyPinnedError} from '../lib/kubo-errors.ts'
 import {
   checkRuntimeDependencyUpdates,
   compareVersions,
   getRuntimeDependencyUpdateMessage,
   getUpdateMessage
-} from '../lib/update-check.js'
-import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.js'
+} from '../lib/update-check.ts'
+import {extractCommunityEntries, getCommunityKey, getCommunityLookup} from '../lib/utils.ts'
 
 test('defaults to both official directory list sources', () => {
   const expectedSources = [
@@ -165,8 +165,8 @@ test('formats runtime dependency update messages without mutating external daemo
 })
 
 test('checks runtime dependency updates through the npm registry helper', async () => {
-  const logs = []
-  const fetchImpl = async () => ({
+  const logs: any[] = []
+  const fetchImpl: any = async () => ({
     ok: true,
     json: async () => ({version: '0.19.82'})
   })
@@ -177,7 +177,7 @@ test('checks runtime dependency updates through the npm registry helper', async 
       currentVersion: '0.19.79'
     }],
     fetchImpl,
-    logger: {log: message => logs.push(message)}
+    logger: {log: (message: any) => logs.push(message)} as any
   })
 
   assert.equal(logs.length, 1)
@@ -220,12 +220,12 @@ test('warns when an existing daemon is older than the bundled CLI', async () => 
     const warning = await getExistingDaemonVersionWarning({
       pkcRpcUrl: 'ws://127.0.0.1:9138',
       bundledVersion: '0.19.82',
-      loadDaemonStates: async () => [{pid: 123, pkcRpcUrl: 'ws://localhost:9138'}],
+      loadDaemonStates: async () => [{pid: 123, pkcRpcUrl: 'ws://localhost:9138'}] as any[],
       readCommandLineArgs: async () => ['node', binPath, 'daemon']
     })
 
-    assert.match(warning, /Existing bitsocial daemon is running @bitsocial\/bitsocial-cli v0\.19\.79/)
-    assert.match(warning, /bitsocial update install --restart-daemons/)
+    assert.match(warning!, /Existing bitsocial daemon is running @bitsocial\/bitsocial-cli v0\.19\.79/)
+    assert.match(warning!, /bitsocial update install --restart-daemons/)
   }
   finally {
     fs.rmSync(tmpDir, {recursive: true, force: true})
@@ -240,8 +240,8 @@ test('warns when an existing daemon version cannot be verified', async () => {
     readCommandLineArgs: async () => []
   })
 
-  assert.match(warning, /could not verify/)
-  assert.match(warning, /at least v0\.19\.82/)
+  assert.match(warning!, /could not verify/)
+  assert.match(warning!, /at least v0\.19\.82/)
 })
 
 test('does not warn when the existing daemon is at least the bundled CLI version', async () => {
@@ -259,7 +259,7 @@ test('does not warn when the existing daemon is at least the bundled CLI version
     assert.equal(await getExistingDaemonVersionWarning({
       pkcRpcUrl: 'ws://127.0.0.1:9138',
       bundledVersion: '0.19.82',
-      loadDaemonStates: async () => [{pid: 123, pkcRpcUrl: 'ws://localhost:9138'}],
+      loadDaemonStates: async () => [{pid: 123, pkcRpcUrl: 'ws://localhost:9138'}] as any[],
       readCommandLineArgs: async () => ['node', binPath, 'daemon']
     }), undefined)
   }

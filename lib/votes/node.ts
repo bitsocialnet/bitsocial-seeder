@@ -43,11 +43,11 @@ import {create as createKubo} from 'kubo-rpc-client'
 // The votes peer id persists across restarts so the provider records announced to the
 // routers stay valid (a fresh id every boot would leave stale records dangling for their
 // 24h TTL) — and because the AutoTLS domain and any browser-pinned multiaddr embed it.
-const loadOrCreatePeerKey = async (keyPath) => {
+const loadOrCreatePeerKey = async (keyPath: string) => {
   try {
     return privateKeyFromProtobuf(new Uint8Array(fs.readFileSync(keyPath)))
   }
-  catch (error) {
+  catch (error: any) {
     if (error.code !== 'ENOENT') {
       throw error
     }
@@ -60,12 +60,12 @@ const loadOrCreatePeerKey = async (keyPath) => {
 
 // Keychain password (encrypts the AutoTLS certificate key at rest), generated once and
 // kept next to the peer key.
-const loadOrCreateKeychainPass = (peerKeyPath) => {
+const loadOrCreateKeychainPass = (peerKeyPath: string) => {
   const passPath = path.join(path.dirname(path.resolve(peerKeyPath)), 'votes-keychain.pass')
   try {
     return fs.readFileSync(passPath, 'utf8').trim()
   }
-  catch (error) {
+  catch (error: any) {
     if (error.code !== 'ENOENT') {
       throw error
     }
@@ -84,13 +84,13 @@ const loadOrCreateKeychainPass = (peerKeyPath) => {
 // and AutoTLS (it waits for a confirmed address). Kubo next door has already done this
 // work, so borrow its answer: best-effort, empty on any failure (Kubo down is normal —
 // votes seeding must survive it, and AutoNAT can still confirm the slow way).
-const kuboPublicIps = async (kuboRpcUrl) => {
+const kuboPublicIps = async (kuboRpcUrl: string) => {
   try {
     const kubo = createKubo({url: kuboRpcUrl})
     const {addresses} = await kubo.id({timeout: 10_000})
     const ips = addresses
       .map((addr) => addr.toString().match(/^\/ip4\/(\d+\.\d+\.\d+\.\d+)\//)?.[1])
-      .filter(Boolean)
+      .filter((ip): ip is string => Boolean(ip))
       .filter((ip) => !isPrivateIp(ip))
     return [...new Set(ips)]
   }
@@ -99,7 +99,7 @@ const kuboPublicIps = async (kuboRpcUrl) => {
   }
 }
 
-const isPrivateIp = (ip) => {
+const isPrivateIp = (ip: string) => {
   const [a, b] = ip.split('.').map(Number)
   return a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)
 }
@@ -113,7 +113,7 @@ const BOOTSTRAP_PEERS = [
   '/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt'
 ]
 
-export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.log}) => {
+export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.log}: {votesConfig: any, kuboRpcUrl: string, log?: (message: string) => void}) => {
   const {listenHost, tcpPort, wsPort, httpRouterUrls, fetchMaxStreams, peerKeyPath, blockstorePath, datastorePath} = votesConfig
   const listen = [`/ip4/${listenHost}/tcp/${tcpPort}`]
   if (wsPort) {
@@ -136,7 +136,7 @@ export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.lo
     log(`votes node: announcing the daemon Kubo's confirmed public IP(s) ${publicIps.join(' ')} on the votes ports`)
   }
   const routers = Object.fromEntries(
-    httpRouterUrls.map((url, i) => [`delegatedRouting${i}`, delegatedRoutingV1HttpApiClient({url})])
+    httpRouterUrls.map((url: string, i: number) => [`delegatedRouting${i}`, delegatedRoutingV1HttpApiClient({url})])
   )
   const services = {
     ...routers,
@@ -167,7 +167,7 @@ export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.lo
     autoNAT: autoNAT(),
     autoTLS: autoTLS({autoConfirmAddress: true})
   }
-  const libp2p = await createLibp2p({
+  const libp2p: any = await createLibp2p({
     privateKey: await loadOrCreatePeerKey(peerKeyPath),
     // Persists the AutoTLS certificate (and keychain) so restarts don't re-run ACME.
     datastore: new FsDatastore(datastorePath),
@@ -181,11 +181,18 @@ export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.lo
     streamMuxers: [yamux()],
     peerDiscovery: [bootstrap({list: BOOTSTRAP_PEERS})],
     services
-  })
+  } as any)
   libp2p.addEventListener('certificate:provision', () => {
     log('votes node: AutoTLS certificate provisioned')
   })
   log('votes node: waiting for AutoNAT to confirm the public address, then AutoTLS provisions the certificate (a few minutes on first run)')
-  const helia = await createHelia({libp2p, blockstore: new FsBlockstore(blockstorePath)})
-  return helia
+  try {
+    return await createHelia({libp2p, blockstore: new FsBlockstore(blockstorePath)})
+  }
+  catch (error) {
+    // createHelia doesn't stop a supplied libp2p on failure — leaked, it keeps holding the
+    // votes ports and every retried tick then dies on EADDRINUSE until a restart.
+    await libp2p.stop().catch(() => {})
+    throw error
+  }
 }

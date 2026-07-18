@@ -1,12 +1,12 @@
-import config from '../config.js'
-import {getCommunityKey, getCommunityLookup, getTimeAgo} from './utils.js'
-import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from './community-cids.js'
-import seederState from './seeder-state.js'
-import {kubo, kuboPubsub, pkc} from './bitsocial.js'
-import {db} from './db.js'
-import {isAlreadyPinnedError} from './kubo-errors.js'
+import config from '../config.ts'
+import {getCommunityKey, getCommunityLookup, getTimeAgo} from './utils.ts'
+import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from './community-cids.ts'
+import seederState from './seeder-state.ts'
+import {kubo, kuboPubsub, pkc} from './bitsocial.ts'
+import {db} from './db.ts'
+import {isAlreadyPinnedError} from './kubo-errors.ts'
 
-const logErrorMessage = (prefix) => (error) => console.log(`${prefix} error: ${error?.message}`)
+const logErrorMessage = (prefix: string) => (error: any) => console.log(`${prefix} error: ${error?.message}`)
 const textEncoder = new TextEncoder()
 
 // Durable work queues. Pin operations and pubsub routing provides used to be
@@ -19,15 +19,15 @@ export const pubsubRoutingQueue = db.queue('pubsub-routing-provide', {maxAttempt
 // live network handles that don't make sense to persist; they're re-created
 // each time the subscribe scheduler tick runs against a not-yet-subscribed
 // community.
-const communitiesUpdating = {}
-const pubsubTopicsJoined = {}
+const communitiesUpdating: {[communityKey: string]: any} = {}
+const pubsubTopicsJoined: {[pubsubTopic: string]: {community: any, unsubscribe: () => Promise<any>}} = {}
 
 // Shared throttle-and-enqueue for pubsub routing provides.
 // Returns true if the provide was enqueued (and the throttle row updated),
 // false if the 6h throttle window has not elapsed for this (community, cid).
 // The caller is responsible for owning the transaction so the enqueue + the
 // throttle write commit atomically with whatever other table work it's doing.
-const enqueueRoutingProvideIfStale = (tx, communityKey, communityAddress, pin, now) => {
+const enqueueRoutingProvideIfStale = (tx: any, communityKey: string, communityAddress: string, pin: any, now: number) => {
   const {cid, name, pubsubTopic} = pin
   const throttleRow = tx.query(
     'SELECT last_queued_at FROM pubsub_routing_provides WHERE community_key = ? AND cid = ?',
@@ -56,10 +56,10 @@ const enqueueRoutingProvideIfStale = (tx, communityKey, communityAddress, pin, n
 // honker's enqueueTx commits the queue row in the same SQLite transaction as
 // our table mutation, so a crash mid-handler either lands both the bookkeeping
 // row and the queued job or neither — no orphaned pins or lost work.
-const handleCommunityUpdate = (community, communityKey) => {
+const handleCommunityUpdate = (community: any, communityKey: string) => {
   const {pins: contentPins, pageCidCount, postUpdatesCount} = getCommunityContentPins(community)
   const pubsubRoutingPins = getCommunityPubsubTopicRoutingPins(community)
-  const firstPagePostCount = Object.values(community.posts?.pages || {})[0]?.comments?.length
+  const firstPagePostCount = (Object.values(community.posts?.pages || {})[0] as any)?.comments?.length
   console.log(`${community.address} updated ${getTimeAgo(community.updatedAt)}, page cids: ${pageCidCount}, post updates cids: ${postUpdatesCount}, pubsub routing cids: ${pubsubRoutingPins.length}, first page posts: ${firstPagePostCount}`)
 
   const allNewCids = new Set([...contentPins.map(p => p.cid), ...pubsubRoutingPins.map(p => p.cid)])
@@ -73,7 +73,7 @@ const handleCommunityUpdate = (community, communityKey) => {
   const tx = db.transaction()
   try {
     const currentRows = tx.query('SELECT cid FROM community_pins WHERE community_key = ?', [communityKey])
-    const currentSet = new Set(currentRows.map(r => r.cid))
+    const currentSet = new Set(currentRows.map((r: any) => r.cid))
 
     // Stale pins: anything we track for this community that isn't in the new desired set.
     for (const {cid} of currentRows) {
@@ -196,7 +196,7 @@ export const joinPubsubTopics = async () => {
     const onMessage = () => {
       console.log(`${community.address} new pubsub message`)
     }
-    const onError = (error) => {
+    const onError = (error: any) => {
       console.log(`${community.address} pubsub subscribe onError`, error)
     }
     kuboPubsub.pubsub.subscribe(pubsubTopic, onMessage, {onError}).then(() => {
@@ -214,25 +214,25 @@ export const joinPubsubTopics = async () => {
 // database, so enqueue → claim latency is bounded by SQLite commit time, not
 // by a polling interval.
 
-const runOneWorker = async (queue, workerId, signal, processJob) => {
+const runOneWorker = async (queue: any, workerId: string, signal: AbortSignal, processJob: (job: any) => Promise<void>) => {
   for await (const job of queue.claim(workerId, {signal})) {
     try {
       await processJob(job)
       job.ack()
     }
-    catch (error) {
+    catch (error: any) {
       console.log(`${workerId} job ${job.id} error: ${error?.message || error}`)
       try {
         job.retry(60, String(error?.message || error))
       }
-      catch (retryError) {
+      catch (retryError: any) {
         console.log(`${workerId} job ${job.id} retry failed: ${retryError?.message || retryError}`)
       }
     }
   }
 }
 
-const processPinOp = async (job) => {
+const processPinOp = async (job: any) => {
   const {op, cid, name, communityAddress} = job.payload
   const before = Date.now()
   if (op === 'add') {
@@ -249,7 +249,7 @@ const processPinOp = async (job) => {
   }
 }
 
-const processPubsubRoutingProvide = async (job) => {
+const processPubsubRoutingProvide = async (job: any) => {
   const {cid, pubsubTopic, name, communityAddress, communityKey} = job.payload
   const before = Date.now()
   console.log(`${communityAddress} pubsub-routing-provide ${cid} (${name || ''})`)
@@ -294,7 +294,7 @@ const processPubsubRoutingProvide = async (job) => {
   }
 }
 
-export const spawnPinWorkers = (signal) => {
+export const spawnPinWorkers = (signal: AbortSignal) => {
   const concurrency = Math.max(1, Number(config.seeding.pinConcurrency) || 2)
   const workers = []
   for (let i = 0; i < concurrency; i++) {

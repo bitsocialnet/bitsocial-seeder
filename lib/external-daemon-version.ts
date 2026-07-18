@@ -2,7 +2,7 @@ import {execFile} from 'node:child_process'
 import fs from 'node:fs/promises'
 import {basename, dirname, parse} from 'node:path'
 import {promisify} from 'node:util'
-import {RUNTIME_DEPENDENCIES, compareVersions} from './update-check.js'
+import {RUNTIME_DEPENDENCIES, compareVersions} from './update-check.ts'
 
 const execFileAsync = promisify(execFile)
 const localHostnames = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'])
@@ -11,9 +11,9 @@ export const BUNDLED_BITSOCIAL_CLI_VERSION = RUNTIME_DEPENDENCIES
   .find(dependency => dependency.packageName === '@bitsocial/bitsocial-cli')
   ?.currentVersion
 
-const normalizeRpcUrl = (urlString) => {
+const normalizeRpcUrl = (urlString?: string) => {
   try {
-    const url = new URL(urlString)
+    const url = new URL(urlString as string)
     const hostname = localHostnames.has(url.hostname) ? 'localhost' : url.hostname
     const port = url.port || (url.protocol === 'wss:' ? '443' : '80')
     return `${url.protocol}//${hostname}:${port}`
@@ -23,7 +23,7 @@ const normalizeRpcUrl = (urlString) => {
   }
 }
 
-export const isSamePkcRpcUrl = (a, b) => {
+export const isSamePkcRpcUrl = (a?: string, b?: string) => {
   const normalizedA = normalizeRpcUrl(a)
   const normalizedB = normalizeRpcUrl(b)
   return Boolean(normalizedA && normalizedB && normalizedA === normalizedB)
@@ -34,7 +34,7 @@ const loadAliveDaemonStates = async () => {
   return getAliveDaemonStates()
 }
 
-export const readProcessCommandLineArgs = async (pid) => {
+export const readProcessCommandLineArgs = async (pid: number | string) => {
   try {
     const raw = await fs.readFile(`/proc/${pid}/cmdline`, 'utf8')
     const args = raw.split('\0').filter(Boolean)
@@ -53,10 +53,10 @@ export const readProcessCommandLineArgs = async (pid) => {
   }
 }
 
-const cleanToken = (token) => token.replace(/^['"]|['"]$/g, '')
+const cleanToken = (token: string) => token.replace(/^['"]|['"]$/g, '')
 
-export const getBitsocialCliPathCandidates = (args = []) => {
-  const candidates = new Set()
+export const getBitsocialCliPathCandidates = (args: string[] = []) => {
+  const candidates = new Set<string>()
   for (const arg of args) {
     for (const token of String(arg).split(/\s+/).map(cleanToken).filter(Boolean)) {
       const name = basename(token)
@@ -73,8 +73,8 @@ export const getBitsocialCliPathCandidates = (args = []) => {
   return [...candidates]
 }
 
-const findBitsocialCliPackageVersion = async (startPath) => {
-  let current
+const findBitsocialCliPackageVersion = async (startPath: string) => {
+  let current: string
   try {
     current = dirname(await fs.realpath(startPath))
   }
@@ -95,7 +95,7 @@ const findBitsocialCliPackageVersion = async (startPath) => {
   }
 }
 
-export const getBitsocialCliVersionFromCommandLineArgs = async (args = []) => {
+export const getBitsocialCliVersionFromCommandLineArgs = async (args: string[] = []) => {
   for (const candidate of getBitsocialCliPathCandidates(args)) {
     const version = await findBitsocialCliPackageVersion(candidate)
     if (version) {
@@ -109,6 +109,11 @@ export const getExistingDaemonVersionWarning = async ({
   bundledVersion = BUNDLED_BITSOCIAL_CLI_VERSION,
   loadDaemonStates = loadAliveDaemonStates,
   readCommandLineArgs = readProcessCommandLineArgs
+}: {
+  pkcRpcUrl?: string
+  bundledVersion?: string
+  loadDaemonStates?: typeof loadAliveDaemonStates
+  readCommandLineArgs?: typeof readProcessCommandLineArgs
 } = {}) => {
   const states = await loadDaemonStates()
   const state = states.find(candidate => candidate.pkcRpcUrl && isSamePkcRpcUrl(candidate.pkcRpcUrl, pkcRpcUrl))
@@ -127,14 +132,14 @@ export const getExistingDaemonVersionWarning = async ({
   }
 }
 
-export const warnIfExistingDaemonMayBeStale = async ({pkcRpcUrl, logger = console} = {}) => {
+export const warnIfExistingDaemonMayBeStale = async ({pkcRpcUrl, logger = console}: {pkcRpcUrl?: string, logger?: Console} = {}) => {
   try {
     const warning = await getExistingDaemonVersionWarning({pkcRpcUrl})
     if (warning) {
       logger.warn(warning)
     }
   }
-  catch (error) {
+  catch (error: any) {
     logger.warn(`Using existing bitsocial daemon RPCs. bitsocial-seeder could not verify the external daemon version: ${error?.message || error}`)
   }
 }

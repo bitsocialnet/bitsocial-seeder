@@ -164,7 +164,7 @@ jobs:
         if: steps.release.outputs.exists == 'false'
         run: |
           mkdir -p .tmp
-          node scripts/changelog-release-notes.mjs "${{ steps.release.outputs.version }}" > .tmp/release-notes.md
+          node scripts/changelog-release-notes.mts "${{ steps.release.outputs.version }}" > .tmp/release-notes.md
 
       - name: Set up Docker Buildx
         if: steps.release.outputs.exists == 'false'

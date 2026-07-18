@@ -48,11 +48,12 @@ export default {
     // document — swapping endpoints must not fork topics); chains without an override use
     // the viem chain's default public RPC.
     chainRpcUrls: JSON.parse(process.env.VOTES_CHAIN_RPC_URLS || '{}'),
-    // ETH RPC URL(s) for .bso community-name resolution (one BsoResolver per URL). Votes
-    // carry community names; a bundle whose name cannot be verified is never counted, so
-    // a seeder without a working resolver serves next to nothing. Empty = the same default
-    // provider list bitsocial-cli gives pkc-js.
-    bsoRpcUrls: parseSourceList(process.env.VOTES_BSO_RPC_URLS || ''),
+    // ETH mainnet RPC URL(s), used everywhere ETH mainnet is needed: .bso community-name
+    // resolution (one BsoResolver per URL — votes carry community names, and a bundle whose
+    // name cannot be verified is never counted) and the default endpoints for eth-gated
+    // contest verification (an explicit VOTES_CHAIN_RPC_URLS "eth" entry still wins there).
+    // Empty = the same six-RPC default list bitsocial-cli gives pkc-js.
+    ethRpcUrls: parseSourceList(process.env.VOTES_ETH_RPC_URLS || ''),
     // The embedded node's persistent peer identity (announced to the routers; the AutoTLS
     // domain embeds it). The keychain password guarding the certificate key lives next to
     // it as votes-keychain.pass.

@@ -1,7 +1,9 @@
-const uniqueByCid = (items) => items.filter(({cid}, i) => cid && items.findIndex(item => item.cid === cid) === i)
+type Pin = {name: string, cid: string, pubsubTopic?: string}
 
-export const getCommunityContentPins = (community) => {
-  const cidsToPin = []
+const uniqueByCid = <T extends {cid: string}>(items: T[]) => items.filter(({cid}, i) => cid && items.findIndex(item => item.cid === cid) === i)
+
+export const getCommunityContentPins = (community: any) => {
+  const cidsToPin: Pin[] = []
   for (const sortType in community.posts?.pageCids || {}) {
     cidsToPin.push({name: `page ${sortType}`, cid: community.posts?.pageCids[sortType]})
   }
@@ -24,7 +26,7 @@ export const getCommunityContentPins = (community) => {
   }
 }
 
-export const getCommunityPubsubTopicRoutingPins = (community) => uniqueByCid([
+export const getCommunityPubsubTopicRoutingPins = (community: any): Pin[] => uniqueByCid([
   {
     name: 'pubsub topic routing',
     cid: community.pubsubTopicRoutingCid,

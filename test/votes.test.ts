@@ -3,7 +3,7 @@ import test from 'node:test'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {fetchVotesManifestSource, loadVotesCriteria} from '../lib/votes/manifest.js'
+import {fetchVotesManifestSource, loadVotesCriteria} from '../lib/votes/manifest.ts'
 
 // A minimal valid manifest in the 5chan-directory-criteria.jsonc shape; two slots, one with
 // a rule override, plus JSONC comments the loader must strip.
@@ -33,7 +33,7 @@ const MANIFEST_JSONC = `{
   ]
 }`
 
-const writeTempManifest = (name, content) => {
+const writeTempManifest = (name: string, content: string) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'votes-manifest-'))
   const filePath = path.join(dir, name)
   fs.writeFileSync(filePath, content)
@@ -72,7 +72,7 @@ test('a manifest carrying RPC URLs in the criteria fails derivation loudly', asy
 
 test('a failing manifest source keeps serving its last good derivation', async () => {
   const {filePath} = writeTempManifest('directory.jsonc', MANIFEST_JSONC)
-  const cache = []
+  const cache: any[] = []
   const first = await loadVotesCriteria([filePath], cache)
   assert.equal(first.length, 2)
 

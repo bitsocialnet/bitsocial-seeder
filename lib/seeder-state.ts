@@ -1,7 +1,7 @@
 import fs from 'fs'
-import config from '../config.js'
-import {db} from './db.js'
-import {getCommunityKey} from './utils.js'
+import config from '../config.ts'
+import {db} from './db.ts'
+import {getCommunityKey} from './utils.ts'
 
 // Source of truth for `communitiesSeeding` is the `communities` SQLite table.
 // We expose the same getter/setter shape the rest of the codebase already uses
@@ -19,20 +19,20 @@ const UPSERT = `
     updated_at = excluded.updated_at
 `
 
-const buildDeleteNotIn = (count) =>
+const buildDeleteNotIn = (count: number) =>
   `DELETE FROM communities WHERE community_key NOT IN (${new Array(count).fill('?').join(',')})`
 
 const getCommunitiesSeeding = () => {
   const rows = db.query(SELECT_ALL)
   if (rows.length === 0) {
     // Preserve the "no communities discovered yet" sentinel (undefined) so
-    // start.js's wait loop continues to work.
+    // start.ts's wait loop continues to work.
     return undefined
   }
   return rows.map(row => JSON.parse(row.data))
 }
 
-const setCommunitiesSeeding = (communities) => {
+const setCommunitiesSeeding = (communities: any[] | undefined) => {
   if (!Array.isArray(communities)) {
     return
   }
@@ -99,7 +99,7 @@ const migrateFromJson = () => {
 
 migrateFromJson()
 
-const seederState = {}
+const seederState = {} as {communitiesSeeding: any[] | undefined}
 Object.defineProperty(seederState, 'communitiesSeeding', {
   get: getCommunitiesSeeding,
   set: setCommunitiesSeeding,

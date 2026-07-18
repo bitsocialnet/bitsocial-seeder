@@ -5,7 +5,7 @@ import http from 'node:http'
 // Local JSON-RPC stub: answers eth_blockNumber with the given hex result, records how
 // many requests it served (the parallelism proof), optionally delayed or failing.
 const startRpcServer = async ({result = '0x10', delayMs = 0, status = 200} = {}) => {
-  const state = {requests: 0}
+  const state = {requests: 0} as {requests: number, url: string, close: () => Promise<any>}
   const server = http.createServer((req, res) => {
     state.requests++
     let body = ''
@@ -23,14 +23,14 @@ const startRpcServer = async ({result = '0x10', delayMs = 0, status = 200} = {})
       }, delayMs)
     })
   })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  state.url = `http://127.0.0.1:${server.address().port}`
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve as () => void))
+  state.url = `http://127.0.0.1:${(server.address() as any).port}`
   state.close = () => new Promise((resolve) => server.close(resolve))
   return state
 }
 
-// The factory reads VOTES_CHAIN_RPC_URLS through config.js at import time, so the servers
-// must exist (ports known) before lib/votes/chains.js is imported. node --test runs each
+// The factory reads VOTES_CHAIN_RPC_URLS through config.ts at import time, so the servers
+// must exist (ports known) before lib/votes/chains.ts is imported. node --test runs each
 // test file in its own process, so this env set cannot leak into other test files.
 const fast = await startRpcServer({result: '0x10'})
 const slow = await startRpcServer({result: '0xff', delayMs: 300})
@@ -42,13 +42,13 @@ process.env.VOTES_CHAIN_RPC_URLS = JSON.stringify({
   onedead: [deadUrl, fast.url],
   allbad: [deadUrl, broken.url]
 })
-const {chainClientFactory, checkChainClients} = await import('../lib/votes/chains.js')
+const {chainClientFactory, checkChainClients} = await import('../lib/votes/chains.ts')
 const {DEFAULT_PROVIDERS} = await import('@bitsocial/bitsocial-cli/dist/common-utils/resolvers.js')
 
 test('multiple RPC urls are queried in PARALLEL, first success wins', async () => {
   const client = chainClientFactory({chain: 'raced', chainId: 900001})
   const before = {fast: fast.requests, slow: slow.requests}
-  assert.equal(await client.getBlockNumber(), 0x10n) // the fast server's answer
+  assert.equal(await client!.getBlockNumber(), 0x10n) // the fast server's answer
   // Sequential failover would never touch the second (healthy first URL); the race
   // hits every endpoint on the SAME request.
   assert.equal(fast.requests, before.fast + 1)
@@ -57,12 +57,12 @@ test('multiple RPC urls are queried in PARALLEL, first success wins', async () =
 
 test('a dead RPC among the urls does not fail (or slow) the request', async () => {
   const client = chainClientFactory({chain: 'onedead', chainId: 900002})
-  assert.equal(await client.getBlockNumber(), 0x10n)
+  assert.equal(await client!.getBlockNumber(), 0x10n)
 })
 
 test('only when EVERY RPC fails does the request throw — a real error, not AggregateError', async () => {
   const client = chainClientFactory({chain: 'allbad', chainId: 900003})
-  await assert.rejects(client.getBlockNumber(), (error) => !(error instanceof AggregateError))
+  await assert.rejects(client!.getBlockNumber(), (error) => !(error instanceof AggregateError))
 })
 
 test('eth mainnet defaults to the six bitsocial-cli RPC providers, raced', () => {
@@ -83,9 +83,9 @@ test('unknown chain with no configured RPC recuses (undefined), never miscounts'
 })
 
 test('checkChainClients logs ok/failure loudly, and only on status CHANGE', async () => {
-  const lines = []
-  const log = (line) => lines.push(line)
-  const criteria = (ticker, chainId) => ({requires: {chains: {[ticker]: {chainId}}}})
+  const lines: string[] = []
+  const log = (line: string) => lines.push(line)
+  const criteria = (ticker: string, chainId: number): any => ({requires: {chains: {[ticker]: {chainId}}}})
 
   await checkChainClients([criteria('raced', 900001)], log)
   assert.equal(lines.length, 1)
