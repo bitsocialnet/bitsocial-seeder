@@ -10,7 +10,7 @@ import {db} from './lib/db.js'
 import {discoverCommunitiesFromLists} from './lib/discover-communities.js'
 import {ensureDaemon} from './lib/daemon.js'
 import seederState from './lib/seeder-state.js'
-import {checkForRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.js'
+import {checkRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.js'
 
 if (!config?.seeding?.communityListSources?.length) {
   console.log(`missing config.js 'seeding.communityListSources'`)
@@ -24,6 +24,9 @@ const abortController = new AbortController()
 const {signal} = abortController
 
 let shuttingDown = false
+// Async teardown hooks (e.g. the votes seeder flushing its checkpoint snapshot) that should
+// finish inside the shutdown grace window; failures never block exit.
+const shutdownCleanups = []
 const shutdown = (signum) => {
   if (shuttingDown) {
     process.exit(1)
@@ -31,10 +34,15 @@ const shutdown = (signum) => {
   shuttingDown = true
   console.log(`received ${signum}, shutting down`)
   abortController.abort()
-  setTimeout(() => {
+  const exit = () => {
     try { db.close() } catch {}
     process.exit(0)
-  }, 5000).unref()
+  }
+  // Exit as soon as the cleanups settle — voter.destroy() is what flushes the debounced
+  // checkpoint write, so cutting it off at a fixed sleep could lose votes on a slow disk —
+  // with the grace timer as the backstop against a hung cleanup.
+  Promise.allSettled(shutdownCleanups.map(cleanup => cleanup())).then(exit, exit)
+  setTimeout(exit, 5000).unref()
 }
 process.once('SIGINT', () => shutdown('SIGINT'))
 process.once('SIGTERM', () => shutdown('SIGTERM'))
@@ -69,7 +77,7 @@ runTickWorker(updateCheckTickQ, 'update-check-worker', async () => {
     return
   }
   await checkForUpdate({timeoutMs: config.updateCheck.timeoutMs})
-  await checkForRuntimeDependencyUpdates({timeoutMs: config.updateCheck.timeoutMs})
+  await checkRuntimeDependencyUpdates({timeoutMs: config.updateCheck.timeoutMs})
 }).catch(error => console.log(`update-check worker exited: ${error?.message || error}`))
 
 if (config.updateCheck.enabled !== false) {
@@ -83,6 +91,19 @@ try {
 catch (error) {
   console.error(error?.message || error)
   process.exit(1)
+}
+
+// --- votes seeding workers (independent of community discovery, so they start as soon as
+// the daemon is up; lazy import so the embedded libp2p node only exists when configured) ---
+const votesEnabled = config.votes.manifestSources.length > 0
+let votesTickQ
+if (votesEnabled) {
+  const {votesTick, destroyVotesSeeder} = await import('./lib/votes/seeder.js')
+  shutdownCleanups.push(destroyVotesSeeder)
+  votesTickQ = tickQueue('votes-tick')
+  runTickWorker(votesTickQ, 'votes-worker', () => votesTick())
+    .catch(error => console.log(`votes worker exited: ${error?.message || error}`))
+  votesTickQ.enqueue({reason: 'startup'})
 }
 
 // --- discover loop ---
@@ -155,6 +176,14 @@ if (config.updateCheck.enabled !== false) {
     name: 'update-check-tick',
     queue: 'update-check-tick',
     schedule: everyS(config.updateCheck.intervalMs),
+    payload: {}
+  })
+}
+if (votesEnabled) {
+  scheduler.add({
+    name: 'votes-tick',
+    queue: 'votes-tick',
+    schedule: everyS(config.votes.reconcileIntervalMs),
     payload: {}
   })
 }
