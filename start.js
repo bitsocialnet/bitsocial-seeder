@@ -10,7 +10,7 @@ import {db} from './lib/db.js'
 import {discoverCommunitiesFromLists} from './lib/discover-communities.js'
 import {ensureDaemon} from './lib/daemon.js'
 import seederState from './lib/seeder-state.js'
-import {checkForRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.js'
+import {checkRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.js'
 
 if (!config?.seeding?.communityListSources?.length) {
   console.log(`missing config.js 'seeding.communityListSources'`)
@@ -77,7 +77,7 @@ runTickWorker(updateCheckTickQ, 'update-check-worker', async () => {
     return
   }
   await checkForUpdate({timeoutMs: config.updateCheck.timeoutMs})
-  await checkForRuntimeDependencyUpdates({timeoutMs: config.updateCheck.timeoutMs})
+  await checkRuntimeDependencyUpdates({timeoutMs: config.updateCheck.timeoutMs})
 }).catch(error => console.log(`update-check worker exited: ${error?.message || error}`))
 
 if (config.updateCheck.enabled !== false) {
