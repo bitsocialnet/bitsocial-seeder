@@ -44,13 +44,15 @@ That's it — you're seeding. The container bundles its own Bitsocial daemon (Ku
 
 **3. (Optional) Cap the workload on small VPSes:**
 
+By default there is no cap — the seeder seeds every community in the configured public lists:
+
 ```sh
 MAX_COMMUNITIES=10 PIN_CONCURRENCY=1 docker compose up -d
 ```
 
 See [VPS Sizing](#vps-sizing) for capacity guidance.
 
-Compose pulls `ghcr.io/bitsocialnet/bitsocial-seeder:latest` by default. To pin a specific version, edit `docker-compose.yml` and set `image: ghcr.io/bitsocialnet/bitsocial-seeder:0.2.0`.
+Compose pulls `ghcr.io/bitsocialnet/bitsocial-seeder:latest` by default. To pin a specific version, edit `docker-compose.yml` and set `image: ghcr.io/bitsocialnet/bitsocial-seeder:0.5.0`.
 
 ### Run without Docker (npm)
 
@@ -160,20 +162,37 @@ Useful environment overrides:
 ```sh
 PKC_RPC_URL=ws://127.0.0.1:9138
 KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
+# Kubo RPC used for pubsub subscriptions; defaults to KUBO_RPC_URL
+PUBSUB_KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 IPFS_GATEWAY_URL=http://127.0.0.1:6473
 COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master,https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master
 COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json
+# How often the community list sources are re-read ("the discovery interval"); default 10 minutes
+DISCOVER_INTERVAL_MS=600000
+# Minimum time between re-providing a community's pubsub routing CIDs; default 6 hours
+PUBSUB_ROUTING_PROVIDE_INTERVAL_MS=21600000
 SEEDER_DAEMON_AUTOSTART=true
 SEEDER_DAEMON_DATA_PATH=/data/bitsocial
 SEEDER_DAEMON_LOG_PATH=/data/logs
+# How long to wait for an autostarted daemon's RPCs to come up, and how long they must
+# stay up before the daemon counts as ready
+SEEDER_DAEMON_READY_TIMEOUT_MS=120000
+SEEDER_DAEMON_READY_STABLE_MS=2500
 SEEDER_DB_PATH=/data/seeder.db
-MAX_COMMUNITIES=20
+# Legacy JSON state file migrated into the database on first start; the mirror write can
+# be disabled with SEEDER_STATE_WRITE_FILE=false
+SEEDER_STATE_PATH=/data/seederState.json
+SEEDER_STATE_WRITE_FILE=true
+# No default cap — all discovered public-list communities are seeded unless this is set
+MAX_COMMUNITIES=
+# Default 2; the Docker image and compose file set 1
 PIN_CONCURRENCY=2
 SEEDER_UPDATE_CHECK_ENABLED=true
 SEEDER_UPDATE_CHECK_INTERVAL_MS=86400000
 SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
 VOTES_MANIFEST_SOURCES=/data/5chan-directory-criteria.jsonc
-VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz
+VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz,https://routerofbitsocial.xyz,https://bsotracker.online
+VOTES_LIBP2P_HOST=0.0.0.0
 VOTES_LIBP2P_TCP_PORT=6742
 VOTES_LIBP2P_WS_PORT=6743
 VOTES_RECONCILE_INTERVAL_MS=600000
@@ -185,6 +204,8 @@ VOTES_DATASTORE_PATH=/data/votes-datastore
 VOTES_DATA_PATH=/data/votes-cache
 VOTES_FETCH_MAX_STREAMS=256
 VOTES_UPDATE_CONCURRENCY=8
+# util.inspect depth for object logging (unset = Node's util.inspect default)
+DEBUG_DEPTH=6
 ```
 
 ### Public seeder defaults
@@ -246,7 +267,7 @@ Raise both if you seed many more communities than the defaults and the seeder ge
 
 The default community sources are dozens of small directory communities plus a short supplemental seeder list, not full media archiving.
 Disk and bandwidth mostly scale with `MAX_COMMUNITIES`, pinned page/update size, pubsub activity, and Kubo/libp2p overhead.
-On small VPSes, lower `MAX_COMMUNITIES` and keep `PIN_CONCURRENCY=1`.
+On small VPSes, set `MAX_COMMUNITIES` (unset = no cap) and keep `PIN_CONCURRENCY=1` (the Docker default).
 
 Bitsocial configures delegated HTTP routing/tracker endpoints for provider lookups, so it should be lighter than an untuned Kubo node doing full DHT provider sweeps.
 It still runs Kubo and joins pubsub topics, so treat it as Kubo-class infrastructure rather than a static HTTP service.
