@@ -172,8 +172,11 @@ const prefixOutput = (prefix: string, chunk: Buffer) => {
   }).join('\n'))
 }
 
+// Guard on exitCode/signalCode, not child.killed: killed flips to true as soon
+// as the first signal is *sent*, which would turn the later SIGKILL escalation
+// into a no-op for a daemon that ignores SIGINT.
 const stopBundledDaemon = (signal: NodeJS.Signals = 'SIGINT') => {
-  if (bundledDaemon && !bundledDaemon.killed) {
+  if (bundledDaemon && bundledDaemon.exitCode === null && bundledDaemon.signalCode === null) {
     bundledDaemon.kill(signal)
   }
 }
