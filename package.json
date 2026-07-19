@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@bitsocial/bitsocial-cli": "0.19.84",
-    "@bitsocial/pubsub-voting": "0.1.2",
+    "@bitsocial/pubsub-voting": "0.1.4",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
     "@helia/delegated-routing-v1-http-api-client": "6.0.1",
@@ -54,7 +54,7 @@
     "@libp2p/keychain": "6.1.4",
     "@libp2p/tcp": "11.0.22",
     "@libp2p/websockets": "10.1.16",
-    "@pkcprotocol/pkc-js": "0.0.69",
+    "@pkcprotocol/pkc-js": "0.0.72",
     "@russellthehippo/honker-node": "0.3.3",
     "blockstore-fs": "3.0.3",
     "datastore-fs": "12.0.1",
