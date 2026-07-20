@@ -99,7 +99,7 @@ const migrateFromJson = () => {
 
 migrateFromJson()
 
-const seederState = {} as {communitiesSeeding: any[] | undefined}
+const seederState = {} as {communitiesSeeding: any[] | undefined; discoveryCompleted?: boolean}
 Object.defineProperty(seederState, 'communitiesSeeding', {
   get: getCommunitiesSeeding,
   set: setCommunitiesSeeding,

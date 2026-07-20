@@ -116,7 +116,10 @@ discoverTickQ.enqueue({reason: 'startup'})
 // discover (e.g. network blip, GitHub rate limit) recovers on the next 10s
 // tick instead of hanging the boot. Mirrors the recovery behavior the old
 // setInterval-based discovery had before the honker migration.
-while (!(seederState as {communitiesSeeding?: any[]}).communitiesSeeding) {
+while (
+  !(seederState as {communitiesSeeding?: any[]; discoveryCompleted?: boolean}).communitiesSeeding &&
+  !(seederState as {discoveryCompleted?: boolean}).discoveryCompleted
+) {
   console.log('no communities discovered yet, checking again in 10 seconds...')
   await new Promise(r => setTimeout(r, 10000))
   discoverTickQ.enqueue({reason: 'startup-retry'})

@@ -3,7 +3,7 @@ import {extractCommunityEntries, fetchCommunityListSource, getCommunityKey} from
 import seederStateModule from './seeder-state.ts'
 import 'dotenv/config'
 
-const seederState = seederStateModule as {communitiesSeeding?: any[]}
+const seederState = seederStateModule as {communitiesSeeding?: any[]; discoveryCompleted?: boolean}
 
 const communityLists: any[] = []
 const extraCommunityLists: any[] = []
@@ -77,10 +77,15 @@ export const discoverCommunitiesFromLists = async () => {
     return
   }
 
-  seederState.communitiesSeeding = mergeDiscoveredCommunities({
+  const communities = mergeDiscoveredCommunities({
     communityLists: fetchedCommunityLists,
     extraCommunityLists: fetchedExtraCommunityLists,
     maxCommunities: config.seeding.maxCommunities
   })
-  console.log(`discovered ${seederState.communitiesSeeding.length} communities to seed`)
+  seederState.communitiesSeeding = communities
+  // An empty result reads back as the undefined "not discovered yet" sentinel, so
+  // completion is tracked separately: a votes-only seeder (zero communities, e.g.
+  // COMMUNITY_LIST_SOURCES pointing at an empty local list) must still finish boot.
+  seederState.discoveryCompleted = true
+  console.log(`discovered ${communities.length} communities to seed`)
 }
