@@ -34,7 +34,8 @@
     "prepack": "npm run build",
     "start": "node start.ts",
     "test": "npm run typecheck && node --test \"test/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@bitsocial/bitsocial-cli": "0.19.84",
@@ -80,6 +81,7 @@
   },
   "devDependencies": {
     "@types/node": "24.13.3",
+    "patch-package": "^8.0.1",
     "typescript": "7.0.2"
   }
 }
