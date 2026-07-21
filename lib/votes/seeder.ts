@@ -1,4 +1,5 @@
 import pLimit from 'p-limit'
+import {create as createKubo} from 'kubo-rpc-client'
 import {createBsoResolvers} from '@bitsocial/bitsocial-cli/dist/common-utils/resolvers.js'
 import {PubsubVoter, criteriaCid, TOPIC_PREFIX} from '@bitsocial/pubsub-voting'
 import type {Contest, Criteria} from '@bitsocial/pubsub-voting'
@@ -94,12 +95,64 @@ const addNodeDiagnostics = (helia: any) => {
   }
 }
 
+// The pre-warm hint. This machine serves community content from its Kubo node — same host,
+// DIFFERENT peer id — so a browser that just dialed the votes node still pays a full router
+// discovery + dial (~1.4s, measured) for Kubo when its first leaderboard resolves. This fetch
+// key hands a connected voter the Kubo peer's browser-dialable addrs so it can dial while the
+// votes cold pull is still running. Discovery-driven by construction: the votes node was
+// itself found through the routers, and the addrs are read live from Kubo, so nothing rots
+// when the Kubo key is regenerated (the failure that killed the hardcoded pre-warm). The
+// addrs are dial HINTS with the peer id embedded — a dial either authenticates that key or
+// fails, exactly as with router-served addrs, so this adds no trust surface.
+const KUBO_PEERS_FETCH_KEY_PREFIX = 'bitsocial-seeder/'
+const KUBO_PEERS_FETCH_KEY = `${KUBO_PEERS_FETCH_KEY_PREFIX}peers`
+const KUBO_PEERS_REFRESH_MS = 5 * 60_000
+
+let kuboBrowserAddrs: string[] = []
+
+// Browsers can only dial secure websockets — the AutoTLS /dns4/….libp2p.direct/…/tls/ws addr.
+const isBrowserDialable = (addr: string) => addr.includes('/tls/ws') || addr.includes('/wss')
+
+const refreshKuboBrowserAddrs = async () => {
+  try {
+    const kubo = createKubo({url: config.kuboRpcUrl})
+    const {id, addresses} = await kubo.id({timeout: 10_000})
+    const idString = String(id)
+    const addrs = [...new Set(
+      addresses
+        .map(String)
+        .filter(isBrowserDialable)
+        .map((addr) => addr.includes('/p2p/') ? addr : `${addr}/p2p/${idString}`)
+    )]
+    if (addrs.length > 0 && addrs.join(' ') !== kuboBrowserAddrs.join(' ')) {
+      console.log(`votes peers hint: serving Kubo addr(s) ${addrs.join(' ')}`)
+    }
+    kuboBrowserAddrs = addrs
+  }
+  catch {
+    // Kubo down is normal (votes seeding must survive it) — keep serving the last answer.
+  }
+}
+
+const registerKuboPeersHint = (helia: any) => {
+  void refreshKuboBrowserAddrs()
+  const timer = setInterval(() => void refreshKuboBrowserAddrs(), KUBO_PEERS_REFRESH_MS)
+  timer.unref?.()
+  helia.libp2p.services.fetch.registerLookupFunction(KUBO_PEERS_FETCH_KEY_PREFIX, async (keyBytes: Uint8Array) => {
+    if (new TextDecoder().decode(keyBytes) !== KUBO_PEERS_FETCH_KEY || kuboBrowserAddrs.length === 0) {
+      return undefined
+    }
+    return new TextEncoder().encode(JSON.stringify({kubo: kuboBrowserAddrs}))
+  })
+}
+
 const ensureVoter = async () => {
   if (voter) {
     return voter
   }
   helia = await createVotesNode({votesConfig: config.votes, kuboRpcUrl: config.kuboRpcUrl})
   addNodeDiagnostics(helia)
+  registerKuboPeersHint(helia)
   voter = new PubsubVoter({
     helia,
     chains: chainClientFactory,
