@@ -63,7 +63,7 @@ MAX_COMMUNITIES=10 PIN_CONCURRENCY=1 docker compose up -d
 
 See [VPS Sizing](#vps-sizing) for capacity guidance.
 
-Compose pulls `ghcr.io/bitsocialnet/bitsocial-seeder:latest` by default. To pin a specific version, edit `docker-compose.yml` and set `image: ghcr.io/bitsocialnet/bitsocial-seeder:0.5.0`.
+Compose pulls `ghcr.io/bitsocialnet/bitsocial-seeder:latest` by default. To pin a specific version, edit `docker-compose.yml` and set `image: ghcr.io/bitsocialnet/bitsocial-seeder:0.6.0`.
 
 ### Run without Docker (npm)
 
