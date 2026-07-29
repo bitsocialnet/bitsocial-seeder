@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@bitsocial/bitsocial-cli": "0.19.84",
-    "@bitsocial/pubsub-voting": "0.1.4",
+    "@bitsocial/pubsub-voting": "0.1.5",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
     "@helia/delegated-routing-v1-http-api-client": "6.0.1",
