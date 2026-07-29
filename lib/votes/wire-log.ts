@@ -19,11 +19,35 @@ import {getAddress} from 'viem'
 // questions ("do we all share one tally?").
 const describeRecord = (record: any) => `${record.count} vote bundle(s), checkpoint ${record.sizeBytes} B, root ${record.root}`
 
-// Describe fetched root-record bytes (the `<topic>/root` fetch-protocol response).
+// A bulk answer (the `bitsocial-votes/roots` key, pubsub-voting >= 0.1.5) is a map of
+// topic -> the same root record, answering every joined contest in one fetch. Since a cold
+// join is one bulk request rather than one fetch per contest, this is the shape a seeder
+// serves most of the time — describing only the single-record shape logged every real cold
+// join as 'undecodable root record'.
+const describeBulkRecords = (records: Record<string, any>) => {
+  const entries = Object.values(records)
+  const bundles = entries.reduce((total, record) => total + record.count, 0)
+  const withVotes = entries.filter((record) => record.count > 0).length
+  return `bulk: ${entries.length} contest(s), ${withVotes} non-empty, ${bundles} vote bundle(s) total`
+}
+
+const isRootRecord = (value: any) => typeof value?.count === 'number'
+
+// Describe fetched root-record bytes: either the single `<topic>/root` response or the bulk
+// `bitsocial-votes/roots` answer.
 export const describeRootRecord = (bytes: Uint8Array) => {
   try {
-    const record: any = dagCbor.decode(bytes)
-    return typeof record?.count === 'number' ? describeRecord(record) : 'undecodable root record'
+    const decoded: any = dagCbor.decode(bytes)
+    if (isRootRecord(decoded)) {
+      return describeRecord(decoded)
+    }
+    // A bulk answer decodes to a plain object of records; require at least one and reject
+    // anything whose values are not records, so garbage still falls through to the fallback.
+    const values = decoded && typeof decoded === 'object' ? Object.values(decoded) : []
+    if (values.length > 0 && values.every(isRootRecord)) {
+      return describeBulkRecords(decoded)
+    }
+    return 'undecodable root record'
   }
   catch {
     return 'undecodable root record'

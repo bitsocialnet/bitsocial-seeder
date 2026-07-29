@@ -27,6 +27,34 @@ test('root records decode to count/size/root — never inferred from byte length
   assert.equal(describeRootRecord(new Uint8Array([1, 2, 3])), 'undecodable root record')
 })
 
+// Since pubsub-voting 0.1.5 a cold join is ONE bulk fetch answering every joined contest,
+// so this is the shape a seeder serves on almost every real cold join. Decoding only the
+// single-record shape made the seeder's main diagnostic read 'undecodable root record'
+// exactly when it had just served a directory-sized checkpoint successfully.
+test('bulk root answers summarize the whole directory, not just one contest', async () => {
+  const record = async (label: string, count: number, sizeBytes: number) => ({
+    version: 1,
+    root: await someCid(label),
+    count,
+    sizeBytes
+  })
+  const bulk = {
+    'bitsocial-votes/one': await record('one', 3, 700),
+    'bitsocial-votes/two': await record('two', 0, 95),
+    // chunkBlocks rides along on the bulk shape; it must not confuse the summary.
+    'bitsocial-votes/three': {...await record('three', 5, 1200), chunkBlocks: [new Uint8Array([1, 2])]}
+  }
+
+  assert.equal(
+    describeRootRecord(dagCbor.encode(bulk)),
+    'bulk: 3 contest(s), 2 non-empty, 8 vote bundle(s) total'
+  )
+
+  // An empty map and a map of non-records are still garbage, not a bulk answer.
+  assert.equal(describeRootRecord(dagCbor.encode({})), 'undecodable root record')
+  assert.equal(describeRootRecord(dagCbor.encode({a: {nope: 1}})), 'undecodable root record')
+})
+
 test('gossip envelopes parse into root | bundle | unknown', async () => {
   const record = {version: 1, root: await someCid('r'), count: 0, sizeBytes: 9}
   const rootMessage = parseGossipMessage(dagCbor.encode({kind: 'root', record}))
