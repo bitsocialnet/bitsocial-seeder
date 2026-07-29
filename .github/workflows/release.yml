@@ -98,6 +98,12 @@ jobs:
           npm install -g npm@11.17.0
           npm --version
 
+      # `npm pack --dry-run` and `npm publish` both run prepack (tsc -p tsconfig.build.json),
+      # which needs the dev dependencies. This job installed nothing, so the build ran
+      # against a node_modules with no @types/node and failed on every global in start.ts.
+      - name: Install dependencies
+        run: npm ci
+
       - name: Resolve release
         id: release
         env:
