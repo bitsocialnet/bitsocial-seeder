@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.6.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.5.0...v0.6.0) (2026-07-29)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.6.0`
+
+### Changes
+
+- Update README.md ([e6d3d9f](https://github.com/bitsocialnet/bitsocial-seeder/commit/e6d3d9f9574facdec4d161c3b74e726d1016bed9))
+- feat: seed @bitsocial/pubsub-votes directory contests ([8300f28](https://github.com/bitsocialnet/bitsocial-seeder/commit/8300f2869bda14b33232ac73ebdf2ea92accce8a))
+- chore: upgrade @bitsocial/bitsocial-cli to 0.19.84 ([dfe3dab](https://github.com/bitsocialnet/bitsocial-seeder/commit/dfe3dabb6fb87a3d59bd10fe4ed0330d9e4d46db))
+- chore: remove @pkcprotocol/pkc-js override ([0b8748c](https://github.com/bitsocialnet/bitsocial-seeder/commit/0b8748cf1d0e9a23b48d84ae6506d85fd42b4ed8))
+- refactor(votes): Helia-only seeding — own blockstore, library announcer, npm pin ([9c95271](https://github.com/bitsocialnet/bitsocial-seeder/commit/9c952711d7955453a334b61efe61c562bbf0c0dd))
+- feat: pubsub-voting 0.1.2, AutoTLS browser reachability, memoized chain clients ([44ff924](https://github.com/bitsocialnet/bitsocial-seeder/commit/44ff924f381536a5f1748589314d767872db5138))
+- refactor(votes): AutoTLS always on, drop VOTES_PUBLIC_IP/VOTES_AUTO_TLS ([1380dec](https://github.com/bitsocialnet/bitsocial-seeder/commit/1380decfd28c1b04390cba1803d2a0132d11f398))
+- fix: start.js imported checkForRuntimeDependencyUpdates but update-check.js exports checkRuntimeDependencyUpdates ([54b3b48](https://github.com/bitsocialnet/bitsocial-seeder/commit/54b3b48b23c19c5ec0bd1bbd7b3843e80de137a7))
+- feat(votes): borrow the daemon Kubo's confirmed public IP for announces and AutoTLS ([d9a1ebf](https://github.com/bitsocialnet/bitsocial-seeder/commit/d9a1ebfedef1b6d858d6c4890f909b74a310906b))
+- fix(votes): auto-confirm the AutoTLS /dns4 addr so it reaches the router announces ([809b031](https://github.com/bitsocialnet/bitsocial-seeder/commit/809b031fd659562bcc3356db6a249a28639fb913))
+- feat(votes): chain-RPC health probe + decoded bundle and root-change logging ([03fcd5f](https://github.com/bitsocialnet/bitsocial-seeder/commit/03fcd5fa4b40ad05c430cbfe34f0f6c82ba0b028))
+- feat(votes): parallel RPC racing + bitsocial-cli's six-RPC eth default ([514186a](https://github.com/bitsocialnet/bitsocial-seeder/commit/514186ab9215c27e3a9861c758dc362bb87dfb05))
+- test(votes): pin chain-client behavior and wire-log decoding ([ca38049](https://github.com/bitsocialnet/bitsocial-seeder/commit/ca380490efb4a8c149365411fa1b12be188b29f9))
+- feat(votes): log EIP-55 checksummed addresses so lines match wallet displays ([1b2d731](https://github.com/bitsocialnet/bitsocial-seeder/commit/1b2d731a4686456bf5b626b40d2aabae2e8c1f26))
+- fix: sync package-lock (uint8arrays 5.1.1) so npm ci passes ([3234442](https://github.com/bitsocialnet/bitsocial-seeder/commit/3234442fb90f4d2831105920212304ead0f80b1c))
+- feat: migrate codebase to TypeScript (erasable syntax, Node 24 type stripping) ([3ce1ce9](https://github.com/bitsocialnet/bitsocial-seeder/commit/3ce1ce971f2a85d4f7538c1ace62fa608c30d779))
+- test: cover pin reconciliation, seeder state, list fetching; add daemon e2e ([74aec4f](https://github.com/bitsocialnet/bitsocial-seeder/commit/74aec4f68fb1ec9e38d083ad68a7effd4d90756a))
+- test(daemon): cover edge cases with fake RPC servers; fix SIGKILL escalation ([9149903](https://github.com/bitsocialnet/bitsocial-seeder/commit/9149903f043857a8fb0ba18c079a4d68beabe96f))
+- test: add start.ts boot smoke test ([5db0ce7](https://github.com/bitsocialnet/bitsocial-seeder/commit/5db0ce7f1e6f932c701c45c5f7810e934cdcc78c))
+- test(daemon-e2e): cover content pins end-to-end ([02f8eb6](https://github.com/bitsocialnet/bitsocial-seeder/commit/02f8eb6dcaf25afe6819e687a306512c5e70e5c5))
+- test(discover): pin source-failure behavior ([fbcb563](https://github.com/bitsocialnet/bitsocial-seeder/commit/fbcb56306114d40a55f38aa44e84b147a2741641))
+- docs(readme): sync defaults with code; document missing env vars ([72c508b](https://github.com/bitsocialnet/bitsocial-seeder/commit/72c508b88955b1d100643d62c34e52159d0e697b))
+- test: cover votes node/seeder, bitsocial clients, and remaining helpers ([da1e2cc](https://github.com/bitsocialnet/bitsocial-seeder/commit/da1e2cc35710b14fa7a55b9cd44a847592d2cd90))
+- chore(deps): bump pubsub-voting to 0.1.4 and pkc-js to 0.0.72 ([a617064](https://github.com/bitsocialnet/bitsocial-seeder/commit/a61706484b8c280e793f1528e5b53819ddeb4e75))
+- mitigate honker-node AbortSignal listener leak via patch-package ([9afad85](https://github.com/bitsocialnet/bitsocial-seeder/commit/9afad85e219c3218f2dc3d39cd3bcd8534a89676))
+- pin patch-package to exact 8.0.1 ([63fa405](https://github.com/bitsocialnet/bitsocial-seeder/commit/63fa40587c63a565d685621cc81c55038a99eaf5))
+- fix: let a zero-community discovery finish boot (votes-only seeder) ([6c4af3c](https://github.com/bitsocialnet/bitsocial-seeder/commit/6c4af3c37a464c835dccd89a3294860457fdc723))
+- serve the Kubo peer's browser-dialable addrs over a votes fetch key (bitsocial-seeder/peers) ([0b62fae](https://github.com/bitsocialnet/bitsocial-seeder/commit/0b62faeae6366cc892dfb3d8b192569f74aa77b8))
+- chore(deps): bump pubsub-voting to 0.1.5 ([acea05a](https://github.com/bitsocialnet/bitsocial-seeder/commit/acea05a926fb177f3843afbf6ade90caf58351fe))
+- feat(votes): seed the published 5chan directory manifest by default ([4605d2c](https://github.com/bitsocialnet/bitsocial-seeder/commit/4605d2c0f3642852c58e6167b4868a930c017ec7))
+- chore: release 0.6.0 ([0c74c00](https://github.com/bitsocialnet/bitsocial-seeder/commit/0c74c00cf354b680f54f623c84b4f71c01b7aa73))
+- fix(docker): apply patches in the image and unbreak the build ([5e24da1](https://github.com/bitsocialnet/bitsocial-seeder/commit/5e24da1fb1eb0beb825d7dc59097e6500fd5e901))
+- ci: install dependencies in the release job ([2e96725](https://github.com/bitsocialnet/bitsocial-seeder/commit/2e96725e64c0b03d7895d001a9b872443ccf7d99))
+
 ## [0.5.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.4.0...v0.5.0) (2026-07-10)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.5.0`
