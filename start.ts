@@ -12,8 +12,15 @@ import {ensureDaemon} from './lib/daemon.ts'
 import seederState from './lib/seeder-state.ts'
 import {checkRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.ts'
 
-if (!config?.seeding?.communityListSources?.length) {
-  console.log(`missing config.ts 'seeding.communityListSources'`)
+// Either half can be switched off (COMMUNITY_LIST_SOURCES=none / VOTES_MANIFEST_SOURCES=none),
+// so a votes-only seeder is a supported config — only *both* off is a misconfiguration.
+const communitiesEnabled = Boolean(
+  config?.seeding?.communityListSources?.length || config?.seeding?.communityExtraListSources?.length
+)
+const votesEnabled = config.votes.manifestSources.length > 0
+
+if (!communitiesEnabled && !votesEnabled) {
+  console.log(`nothing to seed: both 'seeding.communityListSources' (COMMUNITY_LIST_SOURCES) and 'votes.manifestSources' (VOTES_MANIFEST_SOURCES) are empty`)
   process.exit()
 }
 
@@ -95,7 +102,6 @@ catch (error: any) {
 
 // --- votes seeding workers (independent of community discovery, so they start as soon as
 // the daemon is up; lazy import so the embedded libp2p node only exists when configured) ---
-const votesEnabled = config.votes.manifestSources.length > 0
 let votesTickQ
 if (votesEnabled) {
   const {votesTick, destroyVotesSeeder} = await import('./lib/votes/seeder.ts')
@@ -106,47 +112,53 @@ if (votesEnabled) {
   votesTickQ.enqueue({reason: 'startup'})
 }
 
-// --- discover loop ---
-runTickWorker(discoverTickQ, 'discover-worker', () => discoverCommunitiesFromLists())
-  .catch(error => console.log(`discover worker exited: ${error?.message || error}`))
+// --- community seeding (skipped entirely on a votes-only seeder) ---
+if (communitiesEnabled) {
+  // --- discover loop ---
+  runTickWorker(discoverTickQ, 'discover-worker', () => discoverCommunitiesFromLists())
+    .catch(error => console.log(`discover worker exited: ${error?.message || error}`))
 
-discoverTickQ.enqueue({reason: 'startup'})
+  discoverTickQ.enqueue({reason: 'startup'})
 
-// Re-enqueue on every wait iteration so a transient failure on the first
-// discover (e.g. network blip, GitHub rate limit) recovers on the next 10s
-// tick instead of hanging the boot. Mirrors the recovery behavior the old
-// setInterval-based discovery had before the honker migration.
-while (
-  !(seederState as {communitiesSeeding?: any[]; discoveryCompleted?: boolean}).communitiesSeeding &&
-  !(seederState as {discoveryCompleted?: boolean}).discoveryCompleted
-) {
-  console.log('no communities discovered yet, checking again in 10 seconds...')
-  await new Promise(r => setTimeout(r, 10000))
-  discoverTickQ.enqueue({reason: 'startup-retry'})
+  // Re-enqueue on every wait iteration so a transient failure on the first
+  // discover (e.g. network blip, GitHub rate limit) recovers on the next 10s
+  // tick instead of hanging the boot. Mirrors the recovery behavior the old
+  // setInterval-based discovery had before the honker migration.
+  while (
+    !(seederState as {communitiesSeeding?: any[]; discoveryCompleted?: boolean}).communitiesSeeding &&
+    !(seederState as {discoveryCompleted?: boolean}).discoveryCompleted
+  ) {
+    console.log('no communities discovered yet, checking again in 10 seconds...')
+    await new Promise(r => setTimeout(r, 10000))
+    discoverTickQ.enqueue({reason: 'startup-retry'})
+  }
+
+  // --- seeding workers (lazy import so bitsocial.ts + pkc handles initialize after daemon is ready) ---
+  const {
+    subscribeCommunitiesUpdates,
+    joinPubsubTopics,
+    providePubsubTopicRoutingCids,
+    spawnPinWorkers
+  } = await import('./lib/seed-communities.ts')
+
+  runTickWorker(subscribeTickQ, 'subscribe-worker', () => subscribeCommunitiesUpdates())
+    .catch(error => console.log(`subscribe worker exited: ${error?.message || error}`))
+
+  runTickWorker(pubsubTickQ, 'pubsub-worker', async () => {
+    await joinPubsubTopics()
+    await providePubsubTopicRoutingCids()
+  }).catch(error => console.log(`pubsub-tick worker exited: ${error?.message || error}`))
+
+  for (const pinWorker of spawnPinWorkers(signal)) {
+    pinWorker.catch(error => console.log(`pin worker exited: ${error?.message || error}`))
+  }
+
+  subscribeTickQ.enqueue({reason: 'startup'})
+  pubsubTickQ.enqueue({reason: 'startup'})
 }
-
-// --- seeding workers (lazy import so bitsocial.ts + pkc handles initialize after daemon is ready) ---
-const {
-  subscribeCommunitiesUpdates,
-  joinPubsubTopics,
-  providePubsubTopicRoutingCids,
-  spawnPinWorkers
-} = await import('./lib/seed-communities.ts')
-
-runTickWorker(subscribeTickQ, 'subscribe-worker', () => subscribeCommunitiesUpdates())
-  .catch(error => console.log(`subscribe worker exited: ${error?.message || error}`))
-
-runTickWorker(pubsubTickQ, 'pubsub-worker', async () => {
-  await joinPubsubTopics()
-  await providePubsubTopicRoutingCids()
-}).catch(error => console.log(`pubsub-tick worker exited: ${error?.message || error}`))
-
-for (const pinWorker of spawnPinWorkers(signal)) {
-  pinWorker.catch(error => console.log(`pin worker exited: ${error?.message || error}`))
+else {
+  console.log('community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only')
 }
-
-subscribeTickQ.enqueue({reason: 'startup'})
-pubsubTickQ.enqueue({reason: 'startup'})
 
 // --- register scheduler entries (durable periodic re-enqueue) ---
 //
@@ -156,24 +168,26 @@ pubsubTickQ.enqueue({reason: 'startup'})
 const scheduler = db.scheduler()
 const everyS = (ms: any) => `@every ${Math.max(1, Math.floor(Number(ms) / 1000))}s`
 
-scheduler.add({
-  name: 'discover-tick',
-  queue: 'discover-tick',
-  schedule: everyS(config.seeding.discoverIntervalMs),
-  payload: {}
-})
-scheduler.add({
-  name: 'subscribe-tick',
-  queue: 'subscribe-tick',
-  schedule: everyS(10 * 60 * 1000),
-  payload: {}
-})
-scheduler.add({
-  name: 'pubsub-tick',
-  queue: 'pubsub-tick',
-  schedule: everyS(60 * 1000),
-  payload: {}
-})
+if (communitiesEnabled) {
+  scheduler.add({
+    name: 'discover-tick',
+    queue: 'discover-tick',
+    schedule: everyS(config.seeding.discoverIntervalMs),
+    payload: {}
+  })
+  scheduler.add({
+    name: 'subscribe-tick',
+    queue: 'subscribe-tick',
+    schedule: everyS(10 * 60 * 1000),
+    payload: {}
+  })
+  scheduler.add({
+    name: 'pubsub-tick',
+    queue: 'pubsub-tick',
+    schedule: everyS(60 * 1000),
+    payload: {}
+  })
+}
 if (config.updateCheck.enabled !== false) {
   scheduler.add({
     name: 'update-check-tick',

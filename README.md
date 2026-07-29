@@ -42,6 +42,17 @@ some-community.bso pinned Qm... in 1.2s
 
 That's it — you're seeding. The container bundles its own Bitsocial daemon (Kubo IPFS + PKC), discovers communities from the official [5chan](https://github.com/bitsocialnet/lists/tree/master/5chan-directories) and [Seedit](https://github.com/bitsocialnet/lists/tree/master/seedit-directories) directory sources, and pins their content. It re-reads both sources on the normal discovery interval, so communities added to either directory are seeded without another `bitsocial-seeder` upgrade.
 
+It also seeds the [5chan directory votes](#seed-pubsub-votes-directory-contests) by default, so you will see votes lines alongside the community ones:
+
+```
+votes joined 63 contests
+votes fetch serve 5chan-dir-g (12 bundles)
+```
+
+Votes seeding starts an embedded libp2p node that wants two open ports (`6742`/`6743`) and does a few minutes of AutoTLS setup on first run. Set `VOTES_MANIFEST_SOURCES=none` to switch it off and seed communities only.
+
+Directory voting is still on **testnet** — the contests are gated by the `5chan Pass` ERC-721 on Base Sepolia, so seeding them costs only the node and some testnet RPC reads.
+
 **3. (Optional) Cap the workload on small VPSes:**
 
 By default there is no cap — the seeder seeds every community in the configured public lists:
@@ -125,10 +136,17 @@ See [State](#state) for the schema and other tables you can query.
 
 ### Seed pubsub votes (directory contests)
 
-The seeder can also seed [`@bitsocial/pubsub-voting`](https://github.com/bitsocialnet/pubsub-voting) directory contests (e.g. 5chan's board-slot voting). Point it at one or more directory manifests (`{ defaults, contests }` JSONC/JSON, one derived criteria document per slot):
+The seeder seeds [`@bitsocial/pubsub-voting`](https://github.com/bitsocialnet/pubsub-voting) directory contests (e.g. 5chan's board-slot voting) **by default**, from the published 5chan manifest:
 
 ```sh
+# the default — no configuration needed
 VOTES_MANIFEST_SOURCES=https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc
+```
+
+It is on by default because a directory contest is only as live as the seeders holding its checkpoint: browser voters cannot dial each other, so a cold-joining voter with no reachable seeder sees an empty tally. Override the variable to seed a different manifest (`{ defaults, contests }` JSONC/JSON, one derived criteria document per slot), or set it to `none` to opt out:
+
+```sh
+VOTES_MANIFEST_SOURCES=none docker compose up -d
 ```
 
 With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so votes seeding is **Helia-only**: verified vote bundles and checkpoint chunks persist in the node's own on-disk blockstore (`VOTES_BLOCKSTORE_PATH`), and each contest's checkpoint snapshot persists under `VOTES_DATA_PATH` so a restart keeps the tally, with no Kubo involvement. The seeder then:
@@ -141,9 +159,21 @@ Browser voters can only dial **WSS** (and browsers cannot dial each other — th
 
 The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records (and the AutoTLS domain, which embeds the peer id) stay valid across restarts — treat that key file and the `votes-keychain.pass` next to it as part of the seeder's state.
 
-Chain verification reads each contest's gate rule on-chain. Since pubsub-voting 0.1.x the criteria document names chains by ticker + chainId only — RPC endpoints are each client's own setting (so operators can swap endpoints without forking topics). Multiple URLs per chain are queried **in parallel** (every request races all endpoints, first success wins — a dead RPC costs nothing); ETH mainnet defaults to the same six public RPCs bitsocial-cli hardcodes for pkc-js, other chains default to their viem chain's public RPC, and a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker, e.g. `'{"base":["https://my-base-rpc"]}'`) at its own. Votes carry community names whose claims are verified through `.bso` resolution (an ETH mainnet read) — `VOTES_ETH_RPC_URLS` sets the ETH mainnet RPCs used for both name resolution and eth-gated contest verification (an explicit `VOTES_CHAIN_RPC_URLS` `"eth"` entry still wins for verification), defaulting to the same resolver providers bitsocial-cli gives pkc-js; a seeder whose resolvers are down counts (and therefore serves) almost nothing.
+Chain verification reads each contest's gate rule on-chain. Since pubsub-voting 0.1.x the criteria document names chains by ticker + chainId only — RPC endpoints are each client's own setting (so operators can swap endpoints without forking topics). Multiple URLs per chain are queried **in parallel** (every request races all endpoints, first success wins — a dead RPC costs nothing); ETH mainnet defaults to the same six public RPCs bitsocial-cli hardcodes for pkc-js, other chains default to their viem chain's public RPC, and a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker, e.g. `'{"baseSepolia":["https://my-base-sepolia-rpc"]}'` for the published 5chan manifest) at its own. Votes carry community names whose claims are verified through `.bso` resolution (an ETH mainnet read) — `VOTES_ETH_RPC_URLS` sets the ETH mainnet RPCs used for both name resolution and eth-gated contest verification (an explicit `VOTES_CHAIN_RPC_URLS` `"eth"` entry still wins for verification), defaulting to the same resolver providers bitsocial-cli gives pkc-js; a seeder whose resolvers are down counts (and therefore serves) almost nothing.
 
 The log answers the questions production debugging asks — did a voter ever connect (`votes conn open`), join a topic (`votes topic subscribe`), pull the checkpoint (`votes fetch serve`, with the decoded bundle count — a root record is constant-size whether the contest is empty or not, so only the decoded `count` distinguishes "no votes" from "checkpoint didn't load"), or publish a vote (`votes gossip ... live vote bundle`)?
+
+### Run a votes-only seeder
+
+Set `COMMUNITY_LIST_SOURCES=none` to skip community seeding entirely and dedicate the machine to directory contests:
+
+```sh
+COMMUNITY_LIST_SOURCES=none docker compose up -d
+```
+
+The seeder then never runs discovery, subscribes to no community pubsub topics, and pins nothing — it boots straight into the votes workers and logs `community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only`. `none` is what distinguishes "zero sources" from "unset" (an unset or empty variable falls through to the defaults), and the same spelling works for `VOTES_MANIFEST_SOURCES` to get the mirror config: communities only, no votes. Setting *both* to `none` leaves nothing to seed, and the seeder exits with `nothing to seed`.
+
+A votes-only seeder still starts (or attaches to) a Bitsocial daemon, because the same binary serves both roles; it just makes no use of it beyond that.
 
 ## Configuration
 
@@ -165,6 +195,7 @@ KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 # Kubo RPC used for pubsub subscriptions; defaults to KUBO_RPC_URL
 PUBSUB_KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 IPFS_GATEWAY_URL=http://127.0.0.1:6473
+# Default; 'none' disables community seeding (votes-only seeder)
 COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master,https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master
 COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json
 # How often the community list sources are re-read ("the discovery interval"); default 10 minutes
@@ -190,13 +221,15 @@ PIN_CONCURRENCY=2
 SEEDER_UPDATE_CHECK_ENABLED=true
 SEEDER_UPDATE_CHECK_INTERVAL_MS=86400000
 SEEDER_UPDATE_CHECK_TIMEOUT_MS=5000
-VOTES_MANIFEST_SOURCES=/data/5chan-directory-criteria.jsonc
+# Default; 'none' disables votes seeding (communities-only seeder)
+VOTES_MANIFEST_SOURCES=https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc
 VOTES_HTTP_ROUTER_URLS=https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz,https://routerofbitsocial.xyz,https://bsotracker.online
 VOTES_LIBP2P_HOST=0.0.0.0
 VOTES_LIBP2P_TCP_PORT=6742
 VOTES_LIBP2P_WS_PORT=6743
 VOTES_RECONCILE_INTERVAL_MS=600000
-VOTES_CHAIN_RPC_URLS='{"base":["https://mainnet.base.org"]}'
+# Per-chain RPC override; the published 5chan manifest gates on Base Sepolia
+VOTES_CHAIN_RPC_URLS='{"baseSepolia":["https://sepolia.base.org"]}'
 VOTES_ETH_RPC_URLS=https://eth.drpc.org,https://ethereum-rpc.publicnode.com
 VOTES_PEER_KEY_PATH=/data/votes-peer.key
 VOTES_BLOCKSTORE_PATH=/data/votes-blockstore

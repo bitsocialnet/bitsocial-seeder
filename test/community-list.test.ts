@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import {defaultCommunityListSources} from '../config.ts'
+import {defaultCommunityListSources, defaultVotesManifestSources, parseSourceList} from '../config.ts'
 import {getCommunityContentPins, getCommunityPubsubTopicRoutingPins} from '../lib/community-cids.ts'
 import {buildDaemonArgs, isLocalDaemonUrl} from '../lib/daemon.ts'
 import {
@@ -33,10 +33,41 @@ test('defaults to both official directory list sources', () => {
   const compose = fs.readFileSync(new URL('../docker-compose.yml', import.meta.url), 'utf8')
 
   assert.deepEqual(defaultCommunityListSources, expectedSources)
+  // Compose forwards the var unset rather than repeating the URLs, so config.ts stays the
+  // single place the defaults live — and an operator can pass 'none' for a votes-only seeder.
   assert.ok(
-    compose.includes(`COMMUNITY_LIST_SOURCES: "${expectedSources.join(',')}"`),
-    'Docker Compose should use the same two official directory sources'
+    compose.includes('COMMUNITY_LIST_SOURCES: "${COMMUNITY_LIST_SOURCES:-}"'),
+    'Docker Compose should pass COMMUNITY_LIST_SOURCES through, letting config.ts own the default'
   )
+})
+
+test('defaults to seeding the published 5chan directory manifest', () => {
+  assert.deepEqual(defaultVotesManifestSources, [
+    'https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc'
+  ])
+
+  // Compose forwards the var unset so it falls through to the default above rather than
+  // pinning a copy of the URL that could drift from config.ts.
+  const compose = fs.readFileSync(new URL('../docker-compose.yml', import.meta.url), 'utf8')
+  assert.ok(
+    compose.includes('VOTES_MANIFEST_SOURCES: "${VOTES_MANIFEST_SOURCES:-}"'),
+    'Docker Compose should pass VOTES_MANIFEST_SOURCES through, letting config.ts own the default'
+  )
+})
+
+// 'none' is the only way to express zero sources: an unset or empty env var falls through
+// to the defaults, so without it neither half could be switched off.
+test("parses 'none' as zero sources, distinct from an unset var", () => {
+  assert.deepEqual(parseSourceList('none'), [])
+  assert.deepEqual(parseSourceList('NONE'), [])
+  assert.deepEqual(parseSourceList(' none '), [])
+  assert.deepEqual(parseSourceList(''), [])
+  assert.deepEqual(parseSourceList('https://a.example,https://b.example'), [
+    'https://a.example',
+    'https://b.example'
+  ])
+  // A source that merely contains "none" is still a source.
+  assert.deepEqual(parseSourceList('/data/none.json'), ['/data/none.json'])
 })
 
 test('extracts old multisub community entries', () => {

@@ -2,15 +2,27 @@ export const defaultCommunityListSources = [
   'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master',
   'https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master'
 ]
+// The published 5chan directory manifest. Seeding votes is on by default: a directory
+// contest is only as live as the seeders holding its checkpoint, and a network of
+// community seeders that all opted out of votes leaves cold-joining browser voters with
+// nobody to pull from.
+export const defaultVotesManifestSources = [
+  'https://raw.githubusercontent.com/bitsocialnet/lists/master/5chan-directory-criteria.jsonc'
+]
 // The delegated Routing V1 HTTP routers pkc-js clients query by default (pkc-js schema.ts
 // httpRoutersOptions — keep in sync); the votes library's built-in announcer
 // (PubsubVoterOptions.httpRouterUrls) announces the embedded libp2p peer to the same set
 // so voters' findProviders() can find it.
 const defaultVotesHttpRouterUrls = 'https://peers.pleb.bot,https://routing.lol,https://peers.forumindex.com,https://peers.plebpubsub.xyz,https://routerofbitsocial.xyz,https://bsotracker.online'
-const parseSourceList = (value = '') => value
-  .split(',')
-  .map(source => source.trim())
-  .filter(Boolean)
+// An unset or empty env var falls through to the defaults below, so "I want zero sources"
+// needs a spelling of its own: `none` (case-insensitive). COMMUNITY_LIST_SOURCES=none is a
+// votes-only seeder, VOTES_MANIFEST_SOURCES=none a communities-only one.
+export const parseSourceList = (value = '') => value.trim().toLowerCase() === 'none'
+  ? []
+  : value
+    .split(',')
+    .map(source => source.trim())
+    .filter(Boolean)
 
 export default {
   seeding: {
@@ -28,9 +40,9 @@ export default {
   },
   votes: {
     // JSONC/JSON directory-manifest URLs, local files, or directories of manifest files
-    // ({ defaults, contests } shape, e.g. 5chan-directory-criteria.jsonc). Empty = votes
-    // seeding disabled.
-    manifestSources: parseSourceList(process.env.VOTES_MANIFEST_SOURCES || ''),
+    // ({ defaults, contests } shape, e.g. 5chan-directory-criteria.jsonc). Defaults to the
+    // published 5chan directory manifest; VOTES_MANIFEST_SOURCES=none disables votes seeding.
+    manifestSources: parseSourceList(process.env.VOTES_MANIFEST_SOURCES || defaultVotesManifestSources.join(',')),
     // Routing V1 HTTP routers to announce the votes peer to (and to look up other peers
     // through). Passed to the library's built-in announcer (hourly + debounced on checkpoint
     // changes; announces criteria CIDs, checkpoint roots, and chunk CIDs). Defaults to the
