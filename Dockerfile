@@ -9,7 +9,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+# patches/ must land before `npm ci`: the postinstall runs patch-package, and without the
+# patch files it would install a node_modules the runtime image never patches.
 COPY package.json package-lock.json ./
+COPY patches ./patches
 RUN npm ci --omit=dev \
   && npm cache clean --force
 
