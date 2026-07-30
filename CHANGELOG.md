@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.6.1...v0.7.0) (2026-07-30)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.7.0`
+
+### Changes
+
+- fix: a votes-only seeder no longer requires or starts a bitsocial daemon ([6d89977](https://github.com/bitsocialnet/bitsocial-seeder/commit/6d89977e1d6d05909e0c6fd476a055cf2b8b0b40))
+- chore: release 0.7.0 ([b1219a8](https://github.com/bitsocialnet/bitsocial-seeder/commit/b1219a85a4886b3747ffb092fc9ca68a8c09af0a))
+
 ## [0.6.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.6.0...v0.6.1) (2026-07-30)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.6.1`
