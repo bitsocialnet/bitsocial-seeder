@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.6.0...v0.6.1) (2026-07-30)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.6.1`
+
+### Changes
+
+- fix(votes): describe bulk root answers in the fetch-serve log ([07350a6](https://github.com/bitsocialnet/bitsocial-seeder/commit/07350a64c6a8b1b14344a6ad8601a79bbfd18ecc))
+- chore: release 0.6.1 ([96fa67f](https://github.com/bitsocialnet/bitsocial-seeder/commit/96fa67f563a42354fa9ce4ad272ff7d5d2a498b0))
+
 ## [0.6.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.5.0...v0.6.0) (2026-07-29)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.6.0`
