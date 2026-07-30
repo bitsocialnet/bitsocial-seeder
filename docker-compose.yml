@@ -21,7 +21,8 @@ services:
       SEEDER_DAEMON_LOG_PATH: /data/logs
       # Unset falls through to config.ts's default: both official directory folders, polled
       # so changes to either list are discovered without requiring another bitsocial-seeder
-      # release. Set COMMUNITY_LIST_SOURCES=none on the host for a votes-only seeder.
+      # release. Set COMMUNITY_LIST_SOURCES=none on the host for a votes-only seeder, which
+      # requires and starts no bitsocial daemon (the SEEDER_DAEMON_* settings go unused).
       COMMUNITY_LIST_SOURCES: "${COMMUNITY_LIST_SOURCES:-}"
       COMMUNITY_EXTRA_LIST_SOURCES: "${COMMUNITY_EXTRA_LIST_SOURCES:-}"
       SEEDER_STATE_PATH: /data/seederState.json

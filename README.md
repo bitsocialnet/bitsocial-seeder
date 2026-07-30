@@ -2,7 +2,9 @@
 
 Seeds Bitsocial community first pages, post-update CIDs, pubsub topic routing CIDs, and pubsub topics through a `bitsocial daemon`.
 
-It reuses an already-running Kubo and PKC RPC when one is available. If it cannot find a local daemon, it starts the bundled `@bitsocial/bitsocial-cli` daemon automatically and seeds through that node.
+It also seeds [directory vote contests](#seed-pubsub-votes-directory-contests), which needs no daemon at all.
+
+For community seeding it reuses an already-running Kubo and PKC RPC when one is available. If it cannot find a local daemon, it starts the bundled `@bitsocial/bitsocial-cli` daemon automatically and seeds through that node. A [votes-only seeder](#run-a-votes-only-seeder) never requires or starts one.
 
 ## Is this the only way to seed?
 
@@ -157,6 +159,13 @@ With a manifest configured the seeder starts an embedded libp2p/Helia node for t
 
 Browser voters can only dial **WSS** (and browsers cannot dial each other — the gossipsub mesh forms through publicly dialable seeders), so the node runs **AutoTLS** ([libp2p.direct](https://libp2p.direct)): the node learns its public address the same way the daemon's Kubo does (identify observed-addresses from the bootstrap connections, confirmed by AutoNAT dial-backs), then the ACME broker issues a real TLS certificate and the node announces a browser-dialable `/dns4/<peerid>.libp2p.direct/.../tls/ws` address — no reverse proxy, no manual multiaddr config. The certificate takes a few minutes on first run (ACME + DNS propagation) and persists in `VOTES_DATASTORE_PATH` across restarts; watch the log for `AutoTLS certificate provisioned` and the announced addrs. Open `VOTES_LIBP2P_TCP_PORT` and `VOTES_LIBP2P_WS_PORT` in the firewall.
 
+Nothing in the votes path needs a Bitsocial daemon, but a **reachable Kubo (`KUBO_RPC_URL`) makes it faster**, and the seeder polls for one every 5 minutes rather than only at startup, so it picks up a Kubo that appears, restarts, or moves later:
+
+- **it borrows Kubo's confirmed public IP** onto the votes ports. Behind provider NAT the machine's own interfaces carry only private addresses, and js-libp2p's AutoNAT — fed by just the four bootstrap connections — can take a long time to confirm a public one, which stalls both the router announces (private addrs are dropped) and AutoTLS (it waits for a confirmed address). Kubo, with far more peers, has usually settled this already. Look for `announcing the daemon Kubo's confirmed public IP(s)` in the log. This assumes the NAT forwards the votes ports to the same place it forwards Kubo's, which holds on 1:1 provider NAT and open-firewall hosts; if it does not, AutoNAT dial-backs revalidate the borrowed address after a few minutes and drop it.
+- **it serves Kubo's browser-dialable addrs** to connected voters over the `bitsocial-seeder/peers` fetch key, so a browser can start dialing the community-content node while its votes checkpoint pull is still running (~1.4s saved on the first leaderboard). This is worth having on a votes-only seeder too: what matters is that *some* community-serving Kubo is reachable at `KUBO_RPC_URL`, not that this process is the one pinning the communities.
+
+Both are best-effort. With no Kubo reachable the seeder logs nothing about it and votes seeding runs normally — AutoNAT just takes longer to make the node publicly announceable.
+
 The votes peer identity persists in `VOTES_PEER_KEY_PATH` so announced provider records (and the AutoTLS domain, which embeds the peer id) stay valid across restarts — treat that key file and the `votes-keychain.pass` next to it as part of the seeder's state.
 
 Chain verification reads each contest's gate rule on-chain. Since pubsub-voting 0.1.x the criteria document names chains by ticker + chainId only — RPC endpoints are each client's own setting (so operators can swap endpoints without forking topics). Multiple URLs per chain are queried **in parallel** (every request races all endpoints, first success wins — a dead RPC costs nothing); ETH mainnet defaults to the same six public RPCs bitsocial-cli hardcodes for pkc-js, other chains default to their viem chain's public RPC, and a busy public seeder should point `VOTES_CHAIN_RPC_URLS` (JSON, per chain ticker, e.g. `'{"baseSepolia":["https://my-base-sepolia-rpc"]}'` for the published 5chan manifest) at its own. Votes carry community names whose claims are verified through `.bso` resolution (an ETH mainnet read) — `VOTES_ETH_RPC_URLS` sets the ETH mainnet RPCs used for both name resolution and eth-gated contest verification (an explicit `VOTES_CHAIN_RPC_URLS` `"eth"` entry still wins for verification), defaulting to the same resolver providers bitsocial-cli gives pkc-js; a seeder whose resolvers are down counts (and therefore serves) almost nothing.
@@ -171,9 +180,23 @@ Set `COMMUNITY_LIST_SOURCES=none` to skip community seeding entirely and dedicat
 COMMUNITY_LIST_SOURCES=none docker compose up -d
 ```
 
-The seeder then never runs discovery, subscribes to no community pubsub topics, and pins nothing — it boots straight into the votes workers and logs `community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only`. `none` is what distinguishes "zero sources" from "unset" (an unset or empty variable falls through to the defaults), and the same spelling works for `VOTES_MANIFEST_SOURCES` to get the mirror config: communities only, no votes. Setting *both* to `none` leaves nothing to seed, and the seeder exits with `nothing to seed`.
+The seeder then never runs discovery, subscribes to no community pubsub topics, and pins nothing — it boots straight into the votes workers and logs `community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only (no bitsocial daemon needed)`. `none` is what distinguishes "zero sources" from "unset" (an unset or empty variable falls through to the defaults), and the same spelling works for `VOTES_MANIFEST_SOURCES` to get the mirror config: communities only, no votes. Setting *both* to `none` leaves nothing to seed, and the seeder exits with `nothing to seed`.
 
-A votes-only seeder still starts (or attaches to) a Bitsocial daemon, because the same binary serves both roles; it just makes no use of it beyond that.
+**A votes-only seeder never requires a Bitsocial daemon and never starts one.** Only the community half talks to a daemon (PKC RPC for community updates, Kubo for pinning and pubsub), so `COMMUNITY_LIST_SOURCES=none` is also the switch that takes the daemon out of the picture: no PKC RPC probe, no `SEEDER_DAEMON_AUTOSTART`, no bundled daemon, no `SEEDER_DAEMON_DATA_PATH` on disk. That matters on a machine where something else owns the daemon: before this, a votes-only container restarting during daemon maintenance would spawn its own bundled daemon, claim the PKC RPC port, and block the real daemon from coming back.
+
+So on a votes-only seeder:
+
+| variable | status |
+| --- | --- |
+| `COMMUNITY_LIST_SOURCES=none` | the switch |
+| `KUBO_RPC_URL` | **optional, still useful** — the public-IP borrow and the browser pre-warm hint above, both best-effort and polled |
+| `PKC_RPC_URL`, `IPFS_GATEWAY_URL` | unused |
+| `SEEDER_DAEMON_AUTOSTART`, `SEEDER_DAEMON_DATA_PATH`, `SEEDER_DAEMON_LOG_PATH`, `SEEDER_DAEMON_READY_*` | never consulted |
+| `VOTES_*` | the configuration that matters |
+
+Only `VOTES_LIBP2P_TCP_PORT` and `VOTES_LIBP2P_WS_PORT` need to be open inbound. Keep `network_mode: host` (the compose default on Linux) even with no daemon: it publishes those two ports *and* lets the container reach a host Kubo on `127.0.0.1`, which bridge networking would not.
+
+If you are switching an existing seeder to votes-only, the bundled daemon's data directory is left behind and is safe to delete once nothing is seeding communities — `/data/bitsocial` and `/data/logs` inside the volume, per `SEEDER_DAEMON_DATA_PATH` / `SEEDER_DAEMON_LOG_PATH`.
 
 ## Configuration
 
@@ -190,18 +213,21 @@ If no host daemon is running, the container starts its bundled daemon on those s
 Useful environment overrides:
 
 ```sh
+# Community seeding only; a votes-only seeder never opens the PKC RPC
 PKC_RPC_URL=ws://127.0.0.1:9138
+# Required for community seeding; optional (but useful) for votes — see "Run a votes-only seeder"
 KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 # Kubo RPC used for pubsub subscriptions; defaults to KUBO_RPC_URL
 PUBSUB_KUBO_RPC_URL=http://127.0.0.1:50019/api/v0
 IPFS_GATEWAY_URL=http://127.0.0.1:6473
-# Default; 'none' disables community seeding (votes-only seeder)
+# Default; 'none' disables community seeding (votes-only seeder, which needs no daemon)
 COMMUNITY_LIST_SOURCES=https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master,https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master
 COMMUNITY_EXTRA_LIST_SOURCES=/data/extra-communities.json
 # How often the community list sources are re-read ("the discovery interval"); default 10 minutes
 DISCOVER_INTERVAL_MS=600000
 # Minimum time between re-providing a community's pubsub routing CIDs; default 6 hours
 PUBSUB_ROUTING_PROVIDE_INTERVAL_MS=21600000
+# Only consulted when community seeding is on; a votes-only seeder never autostarts a daemon
 SEEDER_DAEMON_AUTOSTART=true
 SEEDER_DAEMON_DATA_PATH=/data/bitsocial
 SEEDER_DAEMON_LOG_PATH=/data/logs
@@ -285,7 +311,7 @@ seeder does not install over or restart externally managed daemon processes.
 ## VPS Sizing
 
 For public seeding, size the host like a small Kubo node plus a lightweight Node.js seeder process.
-The seeder wrapper is small, but with `SEEDER_DAEMON_AUTOSTART=true` it also runs a bundled Bitsocial daemon and Kubo IPFS node.
+The seeder wrapper is small, but with `SEEDER_DAEMON_AUTOSTART=true` it also runs a bundled Bitsocial daemon and Kubo IPFS node. A [votes-only seeder](#run-a-votes-only-seeder) runs neither, so it needs far less — the embedded votes node plus its blockstore and checkpoint snapshots, which is a small fraction of these numbers.
 
 Recommended starting point:
 

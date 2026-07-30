@@ -4,7 +4,7 @@ import {createBsoResolvers} from '@bitsocial/bitsocial-cli/dist/common-utils/res
 import {PubsubVoter, criteriaCid, TOPIC_PREFIX} from '@bitsocial/pubsub-voting'
 import type {Contest, Criteria} from '@bitsocial/pubsub-voting'
 import config from '../../config.ts'
-import {createVotesNode} from './node.ts'
+import {confirmKuboPublicAddrs, createVotesNode} from './node.ts'
 import {chainClientFactory, checkChainClients} from './chains.ts'
 import {loadVotesCriteria} from './manifest.ts'
 import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGossipMessage} from './wire-log.ts'
@@ -95,25 +95,38 @@ const addNodeDiagnostics = (helia: any) => {
   }
 }
 
-// The pre-warm hint. This machine serves community content from its Kubo node — same host,
-// DIFFERENT peer id — so a browser that just dialed the votes node still pays a full router
-// discovery + dial (~1.4s, measured) for Kubo when its first leaderboard resolves. This fetch
-// key hands a connected voter the Kubo peer's browser-dialable addrs so it can dial while the
-// votes cold pull is still running. Discovery-driven by construction: the votes node was
-// itself found through the routers, and the addrs are read live from Kubo, so nothing rots
-// when the Kubo key is regenerated (the failure that killed the hardcoded pre-warm). The
-// addrs are dial HINTS with the peer id embedded — a dial either authenticates that key or
-// fails, exactly as with router-served addrs, so this adds no trust surface.
+// The pre-warm hint. The machine's Kubo node serves community content — same host, DIFFERENT
+// peer id — so a browser that just dialed the votes node still pays a full router discovery +
+// dial (~1.4s, measured) for Kubo when its first leaderboard resolves. This fetch key hands a
+// connected voter the Kubo peer's browser-dialable addrs so it can dial while the votes cold
+// pull is still running. Discovery-driven by construction: the votes node was itself found
+// through the routers, and the addrs are read live from Kubo, so nothing rots when the Kubo
+// key is regenerated (the failure that killed the hardcoded pre-warm). The addrs are dial
+// HINTS with the peer id embedded — a dial either authenticates that key or fails, exactly as
+// with router-served addrs, so this adds no trust surface.
+//
+// Note this stays worth doing on a votes-only seeder: what matters is whether a
+// community-serving Kubo is reachable at KUBO_RPC_URL, not whether this process is the one
+// pinning the communities.
 const KUBO_PEERS_FETCH_KEY_PREFIX = 'bitsocial-seeder/'
 const KUBO_PEERS_FETCH_KEY = `${KUBO_PEERS_FETCH_KEY_PREFIX}peers`
-const KUBO_PEERS_REFRESH_MS = 5 * 60_000
+
+// One poll of the local Kubo feeds both opportunistic uses of it: the pre-warm hint above and
+// the public-IP borrow that gets this node announced (confirmKuboPublicAddrs). Periodic rather
+// than once at startup, because a votes-only seeder never waits for a daemon — Kubo may come
+// up minutes or hours after the votes node, or restart under it, or never exist at all. The
+// confirmation TTL spans a few polls so a couple of failed ones don't flap the announced
+// addrs; past that AutoNAT takes over verifying them.
+const KUBO_REFRESH_MS = 5 * 60_000
+const KUBO_ADDR_TTL_MS = 3 * KUBO_REFRESH_MS
 
 let kuboBrowserAddrs: string[] = []
+let kuboConfirmedAddrs: string[] = []
 
 // Browsers can only dial secure websockets — the AutoTLS /dns4/….libp2p.direct/…/tls/ws addr.
 const isBrowserDialable = (addr: string) => addr.includes('/tls/ws') || addr.includes('/wss')
 
-const refreshKuboBrowserAddrs = async () => {
+const refreshFromKubo = async (helia: any) => {
   try {
     const kubo = createKubo({url: config.kuboRpcUrl})
     const {id, addresses} = await kubo.id({timeout: 10_000})
@@ -128,16 +141,33 @@ const refreshKuboBrowserAddrs = async () => {
       console.log(`votes peers hint: serving Kubo addr(s) ${addrs.join(' ')}`)
     }
     kuboBrowserAddrs = addrs
+
+    const confirmed = confirmKuboPublicAddrs({
+      helia,
+      kuboAddresses: addresses,
+      votesConfig: config.votes,
+      ttlMs: KUBO_ADDR_TTL_MS
+    })
+    // Re-confirming an already-confirmed addr is silent inside libp2p (no self:peer:update
+    // unless confidence changed), so log on change only — this fires every 5 minutes.
+    if (confirmed.length > 0 && confirmed.join(' ') !== kuboConfirmedAddrs.join(' ')) {
+      console.log(`votes node: announcing the daemon Kubo's confirmed public IP(s) on the votes ports: ${confirmed.join(' ')}`)
+    }
+    kuboConfirmedAddrs = confirmed
   }
   catch {
-    // Kubo down is normal (votes seeding must survive it) — keep serving the last answer.
+    // Kubo down is normal (votes seeding must survive it) — keep serving the last answer, and
+    // let the borrowed addrs age out into AutoNAT's hands.
   }
 }
 
-const registerKuboPeersHint = (helia: any) => {
-  void refreshKuboBrowserAddrs()
-  const timer = setInterval(() => void refreshKuboBrowserAddrs(), KUBO_PEERS_REFRESH_MS)
+const startKuboRefresh = (helia: any) => {
+  void refreshFromKubo(helia)
+  const timer = setInterval(() => void refreshFromKubo(helia), KUBO_REFRESH_MS)
   timer.unref?.()
+}
+
+const registerKuboPeersHint = (helia: any) => {
   helia.libp2p.services.fetch.registerLookupFunction(KUBO_PEERS_FETCH_KEY_PREFIX, async (keyBytes: Uint8Array) => {
     if (new TextDecoder().decode(keyBytes) !== KUBO_PEERS_FETCH_KEY || kuboBrowserAddrs.length === 0) {
       return undefined
@@ -150,9 +180,10 @@ const ensureVoter = async () => {
   if (voter) {
     return voter
   }
-  helia = await createVotesNode({votesConfig: config.votes, kuboRpcUrl: config.kuboRpcUrl})
+  helia = await createVotesNode({votesConfig: config.votes})
   addNodeDiagnostics(helia)
   registerKuboPeersHint(helia)
+  startKuboRefresh(helia)
   voter = new PubsubVoter({
     helia,
     chains: chainClientFactory,

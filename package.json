@@ -55,6 +55,7 @@
     "@libp2p/keychain": "6.1.4",
     "@libp2p/tcp": "11.0.22",
     "@libp2p/websockets": "10.1.16",
+    "@multiformats/multiaddr": "13.0.3",
     "@pkcprotocol/pkc-js": "0.0.72",
     "@russellthehippo/honker-node": "0.3.3",
     "blockstore-fs": "3.0.3",

@@ -91,17 +91,27 @@ if (config.updateCheck.enabled !== false) {
   updateCheckTickQ.enqueue({reason: 'startup'})
 }
 
-// --- ensure daemon is up ---
-try {
-  await ensureDaemon()
-}
-catch (error: any) {
-  console.error(error?.message || error)
-  process.exit(1)
+// --- ensure daemon is up (community seeding only) ---
+//
+// Only the community half talks to the daemon: it needs the PKC RPC to subscribe to
+// community updates and Kubo to pin and to run pubsub. The votes half is self-contained
+// (its own Helia node, its own blockstore, chain reads and .bso resolution straight over
+// HTTP RPC), so a votes-only seeder must neither require a daemon nor spawn one. Autostarting
+// there is actively harmful: a votes-only container restarting while the machine's real
+// daemon is down claims the PKC RPC port with a bundled daemon nothing talks to, and then the
+// real daemon cannot come back without manual intervention.
+if (communitiesEnabled) {
+  try {
+    await ensureDaemon()
+  }
+  catch (error: any) {
+    console.error(error?.message || error)
+    process.exit(1)
+  }
 }
 
-// --- votes seeding workers (independent of community discovery, so they start as soon as
-// the daemon is up; lazy import so the embedded libp2p node only exists when configured) ---
+// --- votes seeding workers (no daemon dependency; lazy import so the embedded libp2p node
+// only exists when configured) ---
 let votesTickQ
 if (votesEnabled) {
   const {votesTick, destroyVotesSeeder} = await import('./lib/votes/seeder.ts')
@@ -157,7 +167,7 @@ if (communitiesEnabled) {
   pubsubTickQ.enqueue({reason: 'startup'})
 }
 else {
-  console.log('community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only')
+  console.log('community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only (no bitsocial daemon needed)')
 }
 
 // --- register scheduler entries (durable periodic re-enqueue) ---

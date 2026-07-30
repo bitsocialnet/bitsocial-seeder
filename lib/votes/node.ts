@@ -19,7 +19,7 @@ import {createHelia} from 'helia'
 import {FsBlockstore} from 'blockstore-fs'
 import {FsDatastore} from 'datastore-fs'
 import {generateKeyPair, privateKeyFromProtobuf, privateKeyToProtobuf} from '@libp2p/crypto/keys'
-import {create as createKubo} from 'kubo-rpc-client'
+import {multiaddr} from '@multiformats/multiaddr'
 
 // The embedded libp2p + Helia node backing @bitsocial/pubsub-voting. The daemon's Kubo node
 // CANNOT fill this role over RPC: votes gossipsub needs the library's validate-before-forward
@@ -76,32 +76,49 @@ const loadOrCreateKeychainPass = (peerKeyPath: string) => {
   return pass
 }
 
-// The public IPv4s the daemon's Kubo has CONFIRMED for itself (via its own identify
-// observed-addresses + AutoNAT, backed by far more peers than the votes mesh has).
-// Behind provider NAT the machine's interfaces only carry private IPs and js-libp2p's
-// AutoNAT — fed by just the bootstrap connections — can take arbitrarily long to confirm
-// the public address, which stalls both the router announcer (it drops private addrs)
-// and AutoTLS (it waits for a confirmed address). Kubo next door has already done this
-// work, so borrow its answer: best-effort, empty on any failure (Kubo down is normal —
-// votes seeding must survive it, and AutoNAT can still confirm the slow way).
-const kuboPublicIps = async (kuboRpcUrl: string) => {
-  try {
-    const kubo = createKubo({url: kuboRpcUrl})
-    const {addresses} = await kubo.id({timeout: 10_000})
-    const ips = addresses
-      .map((addr) => addr.toString().match(/^\/ip4\/(\d+\.\d+\.\d+\.\d+)\//)?.[1])
-      .filter((ip): ip is string => Boolean(ip))
-      .filter((ip) => !isPrivateIp(ip))
-    return [...new Set(ips)]
-  }
-  catch {
-    return []
-  }
-}
-
 const isPrivateIp = (ip: string) => {
   const [a, b] = ip.split('.').map(Number)
   return a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)
+}
+
+// The public IPv4s a Kubo node has CONFIRMED for itself (via its own identify
+// observed-addresses + AutoNAT, backed by far more peers than the votes mesh has).
+export const kuboPublicIp4s = (kuboAddresses: Iterable<unknown>) => [...new Set(
+  [...kuboAddresses]
+    .map((addr) => String(addr).match(/^\/ip4\/(\d+\.\d+\.\d+\.\d+)\//)?.[1])
+    .filter((ip): ip is string => Boolean(ip))
+    .filter((ip) => !isPrivateIp(ip))
+)]
+
+// Borrow those IPs onto OUR ports. Behind provider NAT the machine's interfaces only carry
+// private IPs and js-libp2p's AutoNAT — fed by just the bootstrap connections — can take
+// arbitrarily long to confirm the public address, which stalls both the router announcer (it
+// drops private addrs) and AutoTLS (it waits for a confirmed address). Kubo next door has
+// already done that work, so borrow its answer. Assumes the NAT forwards our ports to the
+// same place it forwards Kubo's — true on 1:1 provider NAT and open-firewall hosts.
+//
+// Confirming an address is what puts it in getMultiaddrs(), and therefore in the votes
+// library's router announces and in AutoTLS's view — AutoTLS re-reads getAddresses() on every
+// self:peer:update, so an IP borrowed minutes after boot still provisions a certificate.
+//
+// This replaced a static `appendAnnounce` passed to createLibp2p, for two reasons. The borrow
+// has to be REPEATABLE: a votes-only seeder never waits for a daemon (start.ts only requires
+// one when community seeding is on), so Kubo may appear long after the votes node, or never.
+// And a confirmation carries a TTL, after which AutoNAT revalidates the address by dial-back
+// and unconfirms it if nobody can reach it — an announce addr, by contrast, is trusted
+// unconditionally and forever, so a Kubo whose public IP moved would leave this node
+// advertising an address it never had.
+export const confirmKuboPublicAddrs = ({helia, kuboAddresses, votesConfig, ttlMs}: {helia: any, kuboAddresses: Iterable<unknown>, votesConfig: any, ttlMs: number}) => {
+  const {tcpPort, wsPort} = votesConfig
+  const addressManager = helia.libp2p.components.addressManager
+  const confirmed: string[] = []
+  for (const ip of kuboPublicIp4s(kuboAddresses)) {
+    for (const addr of [`/ip4/${ip}/tcp/${tcpPort}`, ...(wsPort ? [`/ip4/${ip}/tcp/${wsPort}/ws`] : [])]) {
+      addressManager.confirmObservedAddr(multiaddr(addr), {type: 'observed', ttl: ttlMs})
+      confirmed.push(addr)
+    }
+  }
+  return confirmed
 }
 
 // Public peers used for AutoNAT dial-backs so libp2p confirms our public address —
@@ -113,7 +130,7 @@ const BOOTSTRAP_PEERS = [
   '/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt'
 ]
 
-export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.log}: {votesConfig: any, kuboRpcUrl: string, log?: (message: string) => void}) => {
+export const createVotesNode = async ({votesConfig, log = console.log}: {votesConfig: any, log?: (message: string) => void}) => {
   const {listenHost, tcpPort, wsPort, httpRouterUrls, fetchMaxStreams, peerKeyPath, blockstorePath, datastorePath} = votesConfig
   const listen = [`/ip4/${listenHost}/tcp/${tcpPort}`]
   if (wsPort) {
@@ -122,18 +139,6 @@ export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.lo
     // certificate into a listener that isn't already https — an explicit /tls/ws listen
     // creates a certless https server that rejects every handshake (TLS alert 40) forever.
     listen.push(`/ip4/${listenHost}/tcp/${wsPort}/ws`)
-  }
-  // Borrow the public IPs the daemon's Kubo has already confirmed and append them (with
-  // OUR ports) to the announced addrs. appendAnnounce, not announce: the interface-derived
-  // addrs and the AutoTLS /dns4 addr must survive. Assumes the NAT forwards our ports to
-  // the same place it forwards Kubo's — true on 1:1 provider NAT and open-firewall hosts.
-  const publicIps = await kuboPublicIps(kuboRpcUrl)
-  const appendAnnounce = publicIps.flatMap((ip) => [
-    `/ip4/${ip}/tcp/${tcpPort}`,
-    ...(wsPort ? [`/ip4/${ip}/tcp/${wsPort}/ws`] : [])
-  ])
-  if (appendAnnounce.length > 0) {
-    log(`votes node: announcing the daemon Kubo's confirmed public IP(s) ${publicIps.join(' ')} on the votes ports`)
   }
   const routers = Object.fromEntries(
     httpRouterUrls.map((url: string, i: number) => [`delegatedRouting${i}`, delegatedRoutingV1HttpApiClient({url})])
@@ -173,9 +178,10 @@ export const createVotesNode = async ({votesConfig, kuboRpcUrl, log = console.lo
     datastore: new FsDatastore(datastorePath),
     // The library's router announcer reads libp2p.getMultiaddrs() and drops
     // private/unspecified addrs client-side. A 0.0.0.0 listen expands to the machine's
-    // interface addrs; behind NAT the public address comes from the Kubo borrow above,
-    // with identify observed-addresses + AutoNAT dial-backs as the Kubo-less fallback.
-    addresses: {listen, ...(appendAnnounce.length > 0 ? {appendAnnounce} : {})},
+    // interface addrs; behind NAT the public address comes from the Kubo borrow
+    // (confirmKuboPublicAddrs, polled by the seeder), with identify observed-addresses +
+    // AutoNAT dial-backs as the Kubo-less fallback.
+    addresses: {listen},
     transports: [tcp(), webSockets()],
     connectionEncrypters: [noise()],
     streamMuxers: [yamux()],
