@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.7.0...v0.8.0) (2026-08-07)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.8.0`
+
+### Changes
+
+- feat!: upgrade @bitsocial/pubsub-voting to 0.2.0 (ERC-5192 gate) ([d0edb7b](https://github.com/bitsocialnet/bitsocial-seeder/commit/d0edb7bf5bccccb88506cee75302be79a02d9afe))
+- chore: release 0.8.0 ([dc5d416](https://github.com/bitsocialnet/bitsocial-seeder/commit/dc5d4168066f77db69249156bf0c0638808cdbbe))
+
 ## [0.7.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.6.1...v0.7.0) (2026-07-30)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.7.0`
