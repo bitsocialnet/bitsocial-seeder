@@ -15,10 +15,10 @@ const MANIFEST_JSONC = `{
     "maxVotesPerAddress": 1,
     "blocksPerBucket": 43200,
     "voteExpiryBuckets": 30,
-    "rule": {"type": "erc721-min-balance", "chain": "base", "contract": "0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9", "min": 1},
+    "rule": {"type": "erc5192-min-balance", "chain": "base", "contract": "0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9", "min": 1},
     "weight": {"type": "constant", "value": 1},
     "requires": {
-      "rules": ["erc721-min-balance", "constant"],
+      "rules": ["erc5192-min-balance", "constant"],
       "chains": {"base": {"chainId": 8453}}
     }
   },
@@ -28,7 +28,7 @@ const MANIFEST_JSONC = `{
       "contestId": "q",
       "name": "/q/ - Feedback",
       // per-slot override replaces the whole rule field
-      "rule": {"type": "erc721-min-balance", "chain": "base", "contract": "0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9", "min": 2}
+      "rule": {"type": "erc5192-min-balance", "chain": "base", "contract": "0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9", "min": 2}
     }
   ]
 }`

@@ -140,13 +140,13 @@ const writeVotesManifest = (tmpDir: string) => {
       blocksPerBucket: 43200,
       voteExpiryBuckets: 30,
       rule: {
-        type: 'erc721-min-balance',
+        type: 'erc5192-min-balance',
         chain: 'base',
         contract: '0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9',
         min: 1
       },
       weight: {type: 'constant', value: 1},
-      requires: {rules: ['erc721-min-balance', 'constant'], chains: {base: {chainId: 8453}}}
+      requires: {rules: ['erc5192-min-balance', 'constant'], chains: {base: {chainId: 8453}}}
     },
     contests: [{contestId: 'a', name: '/a/ - Anime & Manga'}]
   }))
