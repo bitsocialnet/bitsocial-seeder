@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.8.0...v0.8.1) (2026-08-07)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.8.1`
+
+### Changes
+
+- chore(deps): upgrade the bundled bitsocial-cli and pkc-js, release 0.8.1 ([27d0b26](https://github.com/bitsocialnet/bitsocial-seeder/commit/27d0b2634dad2f76de55684ebc483732af97dbbc))
+
 ## [0.8.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.7.0...v0.8.0) (2026-08-07)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.8.0`
