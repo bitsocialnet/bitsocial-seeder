@@ -1,7 +1,7 @@
 {
   "name": "@bitsocial/bitsocial-seeder",
   "type": "module",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon.",
   "keywords": [
     "bitsocial",
@@ -38,7 +38,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.86",
+    "@bitsocial/bitsocial-cli": "0.19.87",
     "@bitsocial/pubsub-voting": "0.2.0",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
@@ -56,7 +56,7 @@
     "@libp2p/tcp": "11.0.22",
     "@libp2p/websockets": "10.1.16",
     "@multiformats/multiaddr": "13.0.3",
-    "@pkcprotocol/pkc-js": "0.0.77",
+    "@pkcprotocol/pkc-js": "0.0.78",
     "@russellthehippo/honker-node": "0.3.3",
     "blockstore-fs": "3.0.3",
     "datastore-fs": "12.0.1",
