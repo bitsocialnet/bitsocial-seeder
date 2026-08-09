@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.8.2...v0.9.0) (2026-08-09)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.9.0`
+
+### Changes
+
+- chore(deps): bump @bitsocial/pubsub-voting to 0.3.0, release 0.9.0 ([31d1ebc](https://github.com/bitsocialnet/bitsocial-seeder/commit/31d1ebc8f651116409521ce16372178f4da0fb9d))
+
 ## [0.8.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.8.1...v0.8.2) (2026-08-08)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.8.2`
