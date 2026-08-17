@@ -37,16 +37,21 @@ const slow = await startRpcServer({result: '0xff', delayMs: 300})
 const broken = await startRpcServer({status: 500})
 const deadUrl = 'http://127.0.0.1:1' // nothing listens on port 1
 
+// Keyed by CHAIN ID — the canonical spelling since pubsub-voting 0.5.0, where a contest
+// names its chain once as `bucketChainId` and no ticker survives anywhere in the document.
+// `baseSepolia` is deliberately spelled the OLD way: pre-0.5.0 deployments configured this
+// env by ticker and must keep working across the bump (see the legacy-key test below).
 process.env.VOTES_CHAIN_RPC_URLS = JSON.stringify({
-  raced: [fast.url, slow.url],
-  onedead: [deadUrl, fast.url],
-  allbad: [deadUrl, broken.url]
+  '900001': [fast.url, slow.url],
+  '900002': [deadUrl, fast.url],
+  '900003': [deadUrl, broken.url],
+  baseSepolia: [fast.url]
 })
 const {chainClientFactory, checkChainClients} = await import('../lib/votes/chains.ts')
 const {DEFAULT_PROVIDERS} = await import('@bitsocial/bitsocial-cli/dist/common-utils/resolvers.js')
 
 test('multiple RPC urls are queried in PARALLEL, first success wins', async () => {
-  const client = chainClientFactory({chain: 'raced', chainId: 900001})
+  const client = chainClientFactory({chainId: 900001})
   const before = {fast: fast.requests, slow: slow.requests}
   assert.equal(await client!.getBlockNumber(), 0x10n) // the fast server's answer
   // Sequential failover would never touch the second (healthy first URL); the race
@@ -56,17 +61,17 @@ test('multiple RPC urls are queried in PARALLEL, first success wins', async () =
 })
 
 test('a dead RPC among the urls does not fail (or slow) the request', async () => {
-  const client = chainClientFactory({chain: 'onedead', chainId: 900002})
+  const client = chainClientFactory({chainId: 900002})
   assert.equal(await client!.getBlockNumber(), 0x10n)
 })
 
 test('only when EVERY RPC fails does the request throw — a real error, not AggregateError', async () => {
-  const client = chainClientFactory({chain: 'allbad', chainId: 900003})
+  const client = chainClientFactory({chainId: 900003})
   await assert.rejects(client!.getBlockNumber(), (error) => !(error instanceof AggregateError))
 })
 
 test('eth mainnet defaults to the six bitsocial-cli RPC providers, raced', () => {
-  const client = chainClientFactory({chain: 'eth', chainId: 1})
+  const client = chainClientFactory({chainId: 1})
   assert.ok(client) // no override configured, still usable
   assert.equal(DEFAULT_PROVIDERS.length, 6)
   for (const url of DEFAULT_PROVIDERS) {
@@ -75,26 +80,37 @@ test('eth mainnet defaults to the six bitsocial-cli RPC providers, raced', () =>
 })
 
 test('one memoized client per chainId — the read coalescer contract', () => {
-  assert.equal(chainClientFactory({chain: 'raced', chainId: 900001}), chainClientFactory({chain: 'raced', chainId: 900001}))
+  assert.equal(chainClientFactory({chainId: 900001}), chainClientFactory({chainId: 900001}))
 })
 
 test('unknown chain with no configured RPC recuses (undefined), never miscounts', () => {
-  assert.equal(chainClientFactory({chain: 'nope', chainId: 424242424}), undefined)
+  assert.equal(chainClientFactory({chainId: 424242424}), undefined)
+})
+
+test('a pre-0.5.0 VOTES_CHAIN_RPC_URLS keyed by TICKER still overrides that chain', async () => {
+  // Deployed seeders configured this env before the criteria lost its tickers. Bumping the
+  // library must not silently fall back to the chain's default public RPC — the tally would
+  // quietly follow whichever endpoint the operator did NOT choose.
+  const client = chainClientFactory({chainId: 84532}) // 'baseSepolia', the 5chan manifest's chain
+  assert.ok(client)
+  assert.ok(client.transport.name.includes(fast.url), `ticker-keyed override reaches ${fast.url}`)
+  assert.equal(await client.getBlockNumber(), 0x10n)
 })
 
 test('checkChainClients logs ok/failure loudly, and only on status CHANGE', async () => {
   const lines: string[] = []
   const log = (line: string) => lines.push(line)
-  const criteria = (ticker: string, chainId: number): any => ({requires: {chains: {[ticker]: {chainId}}}})
+  // One chain per contest, named once: `bucketChainId`.
+  const criteria = (bucketChainId: number): any => ({bucketChainId})
 
-  await checkChainClients([criteria('raced', 900001)], log)
+  await checkChainClients([criteria(900001)], log)
   assert.equal(lines.length, 1)
-  assert.match(lines[0], /raced \(chainId 900001\): RPC ok, block 16/)
+  assert.match(lines[0], /chainId 900001: RPC ok, block 16/)
 
-  await checkChainClients([criteria('raced', 900001)], log)
+  await checkChainClients([criteria(900001)], log)
   assert.equal(lines.length, 1) // unchanged status: no repeat spam
 
-  await checkChainClients([criteria('allbad', 900003), criteria('nope', 424242424)], log)
+  await checkChainClients([criteria(900003), criteria(424242424)], log)
   assert.equal(lines.length, 3)
   // The failure message must carry the operator fix — a dead RPC silently rejects
   // every incoming vote, which is exactly the failure that shipped once.

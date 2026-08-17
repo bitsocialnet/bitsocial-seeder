@@ -5,11 +5,12 @@ import {DEFAULT_PROVIDERS as ETH_DEFAULT_RPC_URLS} from '@bitsocial/bitsocial-cl
 import type {ChainClient, ChainClientFactory, Criteria} from '@bitsocial/pubsub-voting'
 import config from '../../config.ts'
 
-// ChainClientFactory for PubsubVoter. Since pubsub-voting 0.1.x the criteria names chains
-// by ticker + chainId only — RPC endpoints are deliberately NOT part of the criteria
-// document (they'd fork the topic on every endpoint swap), so mapping a chain to the
-// gateways this seeder trusts happens here: VOTES_CHAIN_RPC_URLS overrides per ticker,
-// otherwise the viem chain's default public RPC.
+// ChainClientFactory for PubsubVoter. Since pubsub-voting 0.5.0 a contest names its chain
+// ONCE and by numeric id (`criteria.bucketChainId`) — there is no ticker anywhere in the
+// document, and rules no longer carry a `chain` option. RPC endpoints are deliberately NOT
+// part of the criteria document either (they'd fork the topic on every endpoint swap), so
+// mapping a chain to the gateways this seeder trusts happens here: VOTES_CHAIN_RPC_URLS
+// overrides, otherwise the viem chain's default public RPC.
 //
 // Contract details that matter (see ChainClientFactory in @bitsocial/pubsub-voting):
 // - Return ONE shared client per chainId, memoized: the voter wraps each distinct client
@@ -26,6 +27,41 @@ const viemChainById = new Map<number, Chain>(
     .filter(chain => typeof chain?.id === 'number')
     .map(chain => [chain.id, chain])
 )
+
+// VOTES_CHAIN_RPC_URLS keys, most specific first. The chain id is the canonical spelling
+// now that the criteria carries nothing else, but deployments configured before 0.5.0 keyed
+// this env by TICKER — so the ticker spellings keep working: the viem chain's export names
+// for that id ('base', 'baseSepolia', 'mainnet'), plus 'eth' for mainnet, which is what
+// bitsocial spells chainId 1 everywhere else (VOTES_ETH_RPC_URLS, the resolvers). Bumping
+// the library must not silently drop an operator's RPC override and take the tally with it.
+const tickersByChainId = new Map<number, string[]>()
+for (const [key, chain] of Object.entries(viemChains) as [string, Chain][]) {
+  if (typeof chain?.id !== 'number') {
+    continue
+  }
+  tickersByChainId.set(chain.id, [...(tickersByChainId.get(chain.id) ?? []), key])
+}
+tickersByChainId.set(1, ['eth', ...(tickersByChainId.get(1) ?? [])])
+
+const rpcUrlKeys = (chainId: number) => [String(chainId), ...(tickersByChainId.get(chainId) ?? [])]
+
+// A human label for the logs, which used to name the ticker the criteria carried. The id is
+// the identity now, so it always appears; a known chain also gets its name.
+const chainLabel = (chainId: number) => {
+  const ticker = tickersByChainId.get(chainId)?.[0]
+  return ticker ? `${ticker} (chainId ${chainId})` : `chainId ${chainId}`
+}
+
+const overrideRpcUrls = (chainId: number) => {
+  for (const key of rpcUrlKeys(chainId)) {
+    const urls = config.votes.chainRpcUrls?.[key]
+    const usable = Array.isArray(urls) ? urls.filter(Boolean) : []
+    if (usable.length > 0) {
+      return usable
+    }
+  }
+  return []
+}
 
 // Race every request across ALL the URLs and take the first success — pkc-js-style
 // parallel querying, NOT viem's fallback() (sequential failover, where a dead first
@@ -51,13 +87,12 @@ const parallelTransport = (urls: string[]): Transport => (opts: any) => {
 
 const clients = new Map<number, ChainClient>() // chainId → ChainClient
 
-export const chainClientFactory: ChainClientFactory = ({chain: chainTicker, chainId}) => {
+export const chainClientFactory: ChainClientFactory = ({chainId}) => {
   if (clients.has(chainId)) {
     return clients.get(chainId)
   }
   const chain = viemChainById.get(chainId)
-  const overrideUrls = config.votes.chainRpcUrls?.[chainTicker]
-  let urls = Array.isArray(overrideUrls) ? overrideUrls.filter(Boolean) : []
+  let urls = overrideRpcUrls(chainId)
   if (urls.length === 0 && chainId === 1) {
     // ETH mainnet default: the operator's VOTES_ETH_RPC_URLS (the same URLs .bso name
     // resolution uses), else the public RPC list bitsocial-cli hardcodes for pkc-js —
@@ -88,16 +123,12 @@ export const chainClientFactory: ChainClientFactory = ({chain: chainTicker, chai
 const chainHealth = new Map<number, string>() // chainId → 'ok' | 'failed' | 'unconfigured'
 
 export const checkChainClients = async (criteriaList: Criteria[], log = console.log) => {
-  const chains = new Map<number, string>() // chainId → ticker
-  for (const criteria of criteriaList) {
-    for (const [ticker, chainConfig] of Object.entries(criteria.requires?.chains ?? {})) {
-      chains.set(chainConfig.chainId, ticker)
-    }
-  }
-  for (const [chainId, ticker] of chains) {
+  // One chain per contest since 0.5.0: `bucketChainId` is the clock every rule reads.
+  const chainIds = new Set(criteriaList.map(criteria => criteria.bucketChainId))
+  for (const chainId of chainIds) {
     let status, detail
     try {
-      const client = chainClientFactory({chain: ticker, chainId})
+      const client = chainClientFactory({chainId})
       if (client === undefined) {
         status = 'unconfigured'
         detail = 'unknown chainId and no VOTES_CHAIN_RPC_URLS entry — this seeder recuses these contests'
@@ -116,10 +147,10 @@ export const checkChainClients = async (criteriaList: Criteria[], log = console.
     }
     chainHealth.set(chainId, status)
     if (status === 'ok') {
-      log(`votes chain ${ticker} (chainId ${chainId}): RPC ok, ${detail}`)
+      log(`votes chain ${chainLabel(chainId)}: RPC ok, ${detail}`)
     }
     else {
-      log(`votes chain ${ticker} (chainId ${chainId}): RPC ${status} — ${detail}. Without a working RPC, verification rejects EVERY incoming vote on contests requiring this chain (the tally silently stays empty). Set VOTES_CHAIN_RPC_URLS='{"${ticker}":["https://…"]}'.`)
+      log(`votes chain ${chainLabel(chainId)}: RPC ${status} — ${detail}. Without a working RPC, verification rejects EVERY incoming vote on contests requiring this chain (the tally silently stays empty). Set VOTES_CHAIN_RPC_URLS='{"${chainId}":["https://…"]}'.`)
     }
   }
 }
