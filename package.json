@@ -34,11 +34,10 @@
     "prepack": "npm run build",
     "start": "node start.ts",
     "test": "npm run typecheck && node --test \"test/*.test.ts\"",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "patch-package"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.87",
+    "@bitsocial/bitsocial-cli": "0.19.92",
     "@bitsocial/pubsub-voting": "0.5.0",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
@@ -56,8 +55,8 @@
     "@libp2p/tcp": "11.0.22",
     "@libp2p/websockets": "10.1.16",
     "@multiformats/multiaddr": "13.0.3",
-    "@pkcprotocol/pkc-js": "0.0.78",
-    "@russellthehippo/honker-node": "0.3.3",
+    "@pkcprotocol/pkc-js": "0.0.83",
+    "@russellthehippo/honker-node": "0.4.5",
     "blockstore-fs": "3.0.3",
     "datastore-fs": "12.0.1",
     "dotenv": "16.0.3",
@@ -67,7 +66,6 @@
     "libp2p": "3.3.5",
     "multiformats": "13.4.2",
     "p-limit": "6.2.0",
-    "patch-package": "8.0.1",
     "string-strip-html": "13.4.8",
     "strip-json-comments": "5.0.3",
     "viem": "2.54.0",
