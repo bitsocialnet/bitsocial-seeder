@@ -55,10 +55,11 @@ export default {
     tcpPort: Number(process.env.VOTES_LIBP2P_TCP_PORT || 6742),
     wsPort: Number(process.env.VOTES_LIBP2P_WS_PORT || 6743),
     reconcileIntervalMs: Number(process.env.VOTES_RECONCILE_INTERVAL_MS || 10 * 60 * 1000),
-    // Per-chain RPC override, JSON: {"base": ["https://my-base-rpc"]}. Since pubsub-voting
-    // 0.1.x RPC endpoints are the client's own setting (deliberately NOT in the criteria
-    // document — swapping endpoints must not fork topics); chains without an override use
-    // the viem chain's default public RPC.
+    // Per-chain RPC override, JSON keyed by chain id: {"8453": ["https://my-base-rpc"]}.
+    // RPC endpoints are the client's own setting (deliberately NOT in the criteria document —
+    // swapping endpoints must not fork topics); chains without an override use the viem
+    // chain's default public RPC. Pre-0.5.0 configs keyed this by ticker ("base", "eth"),
+    // back when the criteria carried one; lib/votes/chains.ts still accepts those spellings.
     chainRpcUrls: JSON.parse(process.env.VOTES_CHAIN_RPC_URLS || '{}'),
     // ETH mainnet RPC URL(s), used everywhere ETH mainnet is needed: .bso community-name
     // resolution (one BsoResolver per URL — votes carry community names, and a bundle whose

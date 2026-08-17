@@ -137,16 +137,18 @@ const writeVotesManifest = (tmpDir: string) => {
     defaults: {
       voteSchema: {min: 1, max: 1},
       maxVotesPerAddress: 1,
+      bucketChainId: 8453,
       blocksPerBucket: 43200,
       voteExpiryBuckets: 30,
-      rule: {
-        type: 'erc5192-min-balance',
-        chain: 'base',
-        contract: '0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9',
-        min: 1
+      gate: {
+        rule: {
+          type: 'erc5192-min-balance',
+          contract: '0x13d41d6B8EA5C86096bb7a94C3557FCF184491b9',
+          min: 1
+        }
       },
       weight: {type: 'constant', value: 1},
-      requires: {rules: ['erc5192-min-balance', 'constant'], chains: {base: {chainId: 8453}}}
+      requires: {rules: ['erc5192-min-balance', 'constant']}
     },
     contests: [{contestId: 'a', name: '/a/ - Anime & Manga'}]
   }))
