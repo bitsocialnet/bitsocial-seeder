@@ -9,10 +9,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# patches/ must land before `npm ci`: the postinstall runs patch-package, and without the
-# patch files it would install a node_modules the runtime image never patches.
 COPY package.json package-lock.json ./
-COPY patches ./patches
 RUN npm ci --omit=dev \
   && npm cache clean --force
 
@@ -30,8 +27,11 @@ ENV NODE_ENV=production \
   SEEDER_DB_PATH=/data/seeder.db \
   PIN_CONCURRENCY=1
 
+# libsqlite3-0: honker-node's prebuilt binding links libsqlite3.so.0 dynamically as of
+# 0.4.5 (0.3.3 bundled SQLite statically). The deps stage only has it transitively via the
+# build toolchain, so the runtime image must ask for it or `require` fails at boot.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates tini \
+  && apt-get install -y --no-install-recommends ca-certificates tini libsqlite3-0 \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /data \
   && chown -R node:node /data /app
