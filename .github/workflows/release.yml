@@ -104,27 +104,53 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Resolve release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # release-it derives the next version from the conventional commits since the last
+      # tag, so nothing here reads a hand-edited version. It would bump for *any* commit
+      # though, including a docs- or CI-only push, so gate it on there being something
+      # worth cutting an image and an npm version for.
+      - name: Check for releasable commits
+        id: gate
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v$VERSION"
-          MAJOR="${VERSION%%.*}"
-          MAJOR_MINOR="${VERSION%.*}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
-          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+          LAST_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          if [ -z "$LAST_TAG" ]; then RANGE="HEAD"; else RANGE="$LAST_TAG..HEAD"; fi
+          COUNT="$(git log --no-merges --format='%s' "$RANGE" \
+            | grep -vE '^(docs|ci|style|test)(\([^)]*\))?!?:' \
+            | grep -vE '^chore\(release\)' \
+            | wc -l || true)"
+          echo "Releasable commits since ${LAST_TAG:-<no tag>}: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing releasable since $LAST_TAG; skipping the release."
           fi
 
+      # Bumps package.json, regenerates CHANGELOG.md via the after:bump hook, commits
+      # `chore(release): <version> [skip ci]`, tags and pushes. The [skip ci] marker and
+      # GITHUB_TOKEN-authored pushes both keep this from re-triggering the workflow.
+      - name: Cut release
+        if: steps.gate.outputs.release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm run release -- --ci
+
+      - name: Resolve released version
+        if: steps.gate.outputs.release == 'true'
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
+          echo "major_minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Released v$VERSION"
+
       - name: Resolve npm publish
-        if: steps.release.outputs.exists == 'false'
+        if: steps.gate.outputs.release == 'true'
         id: npm
         run: |
           PACKAGE_NAME="$(node -p "require('./package.json').name")"
@@ -146,38 +172,21 @@ jobs:
           fi
 
       - name: Verify npm package contents
-        if: steps.release.outputs.exists == 'false' && steps.npm.outputs.publish == 'true'
+        if: steps.gate.outputs.release == 'true' && steps.npm.outputs.publish == 'true'
         run: npm pack --dry-run
 
-      - name: Generate changelog
-        if: steps.release.outputs.exists == 'false'
-        run: npm run changelog
-
-      - name: Commit changelog
-        if: steps.release.outputs.exists == 'false'
-        id: changelog
-        run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- CHANGELOG.md; then
-            git add CHANGELOG.md
-            git commit -m "chore(release): update changelog for ${{ steps.release.outputs.tag }}"
-            git push origin HEAD:master
-          fi
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
       - name: Write GitHub release notes
-        if: steps.release.outputs.exists == 'false'
+        if: steps.gate.outputs.release == 'true'
         run: |
           mkdir -p .tmp
           node scripts/changelog-release-notes.mts "${{ steps.release.outputs.version }}" > .tmp/release-notes.md
 
       - name: Set up Docker Buildx
-        if: steps.release.outputs.exists == 'false'
+        if: steps.gate.outputs.release == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: steps.release.outputs.exists == 'false'
+        if: steps.gate.outputs.release == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -185,7 +194,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push release image
-        if: steps.release.outputs.exists == 'false'
+        if: steps.gate.outputs.release == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -197,17 +206,17 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
 
       - name: Publish npm package
-        if: steps.release.outputs.exists == 'false' && steps.npm.outputs.publish == 'true'
+        if: steps.gate.outputs.release == 'true' && steps.npm.outputs.publish == 'true'
         run: npm publish --access public
 
       - name: Create GitHub release
-        if: steps.release.outputs.exists == 'false'
+        if: steps.gate.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.release.outputs.tag }}" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "${{ steps.changelog.outputs.sha }}" \
+            --target "${{ steps.release.outputs.sha }}" \
             --title "${{ steps.release.outputs.tag }}" \
             --notes-file .tmp/release-notes.md \
             --latest

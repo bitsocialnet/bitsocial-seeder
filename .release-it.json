@@ -1,0 +1,30 @@
+{
+  "git": {
+    "requireCleanWorkingDir": false,
+    "requireCommits": true,
+    "requireCommitsFail": false,
+    "commit": false,
+    "tagName": "v${version}",
+    "tagAnnotation": "v${version}",
+    "push": true,
+    "pushArgs": ["--follow-tags"]
+  },
+  "npm": {
+    "publish": false
+  },
+  "github": {
+    "release": false
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "conventionalcommits",
+        "preMajor": true
+      }
+    }
+  },
+  "hooks": {
+    "after:bump": "npm i --package-lock-only && npm run changelog",
+    "before:git:release": "git add CHANGELOG.md package.json package-lock.json && git commit -m \"chore(release): ${version} [skip ci]\""
+  }
+}
