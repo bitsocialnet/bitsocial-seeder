@@ -72,6 +72,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          # Authenticates the bitsocial-cli postinstall's GitHub releases API calls, which
+          # 403'd on the shared runner IP's unauthenticated rate limit. See the Dockerfile.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
