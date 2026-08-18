@@ -32,6 +32,7 @@
     "changelog": "node scripts/generate-changelog.mts",
     "changelog:release-notes": "node scripts/changelog-release-notes.mts",
     "prepack": "npm run build",
+    "release": "release-it",
     "start": "node start.ts",
     "test": "npm run typecheck && node --test \"test/*.test.ts\"",
     "typecheck": "tsc --noEmit"
@@ -80,7 +81,9 @@
     "utf-8-validate": "6.0.6"
   },
   "devDependencies": {
+    "@release-it/conventional-changelog": "10.0.6",
     "@types/node": "24.13.3",
+    "release-it": "19.2.4",
     "typescript": "7.0.2"
   }
 }
