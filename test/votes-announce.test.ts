@@ -18,6 +18,10 @@ const getFreePort = () => new Promise<number>((resolve, reject) => {
 
 type Announce = {raw: string, body: any}
 
+// pkc-http-router's replay bounds on Payload.Timestamp (lib/signature.ts).
+const MAX_TIMESTAMP_AGE_MS = 24 * 60 * 60 * 1000
+const MAX_TIMESTAMP_SKEW_MS = 60 * 60 * 1000
+
 // Stands in for a signature-verifying Routing V1 router, mimicking pkc-http-router's contract:
 // an unsigned record is rejected outright with 403 'record verification failed: record has no
 // Signature', and nothing is stored. Verification there is on unless VERIFY_SIGNATURES=0, so
@@ -54,8 +58,16 @@ const createVerifyingRouter = () => {
         json(403, {Error: 'record verification failed: record has no Signature'})
         return
       }
-      if (provider?.Payload?.Timestamp === undefined) {
+      // pkc-http-router's verifyTimestamp rejects anything that is not a finite number, then
+      // bounds it: older than 24h is stale_timestamp, more than 1h ahead is future_timestamp.
+      const timestamp = provider?.Payload?.Timestamp
+      if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
         json(403, {Error: 'record verification failed: record has no Payload.Timestamp'})
+        return
+      }
+      const now = Date.now()
+      if (timestamp < now - MAX_TIMESTAMP_AGE_MS || timestamp > now + MAX_TIMESTAMP_SKEW_MS) {
+        json(403, {Error: `record verification failed: Payload.Timestamp ${timestamp} is outside the accepted window`})
         return
       }
       json(200, {ProvideResults: [{Schema: 'peer'}]})
@@ -180,11 +192,17 @@ test('votes announces carry a signature a verifying router accepts', {timeout: 1
       typeof provider.Signature === 'string' && provider.Signature.length > 0,
       `announce is unsigned, so a verifying router rejects it with 403 (pubsub-voting#38): ${JSON.stringify(provider)}`
     )
-    // Stamped fresh per announce, not cached: the router bounds it for replay (24h stale,
-    // 1h skew), so a record carrying a build-time or join-time constant would start failing.
+    // Stamped fresh per announce, not cached. Asserted the way the router checks it: a finite
+    // *number* (a string is rejected outright as missing_timestamp, so accepting one here would
+    // pass a record production drops), inside the replay window it bounds — 24h stale, 1h skew.
+    // A build-time or join-time constant would drift out of that window and start failing.
+    const {Timestamp} = provider.Payload
+    assert.equal(typeof Timestamp, 'number', `Payload.Timestamp must be epoch ms, got ${JSON.stringify(Timestamp)}`)
+    assert.ok(Number.isFinite(Timestamp), `Payload.Timestamp is not finite: ${Timestamp}`)
+    const now = Date.now()
     assert.ok(
-      Number.isFinite(provider.Payload?.Timestamp) || typeof provider.Payload?.Timestamp === 'string',
-      `announce carried no usable Payload.Timestamp: ${JSON.stringify(provider.Payload)}`
+      Timestamp > now - MAX_TIMESTAMP_AGE_MS && Timestamp < now + MAX_TIMESTAMP_SKEW_MS,
+      `Payload.Timestamp ${Timestamp} is outside the router's accepted window around ${now}`
     )
 
     // And the seeder must not be logging announce failures against a router that verifies.
