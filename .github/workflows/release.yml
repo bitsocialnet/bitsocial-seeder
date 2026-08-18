@@ -57,11 +57,16 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # Deliberately no `latest` here. This job runs on every master push,
+          # including ones the release gate skips, so publishing :latest from it
+          # made the tag track master HEAD rather than the newest release — and
+          # briefly overwrote the previous release's image mid-run. The release
+          # job is now the only writer of :latest. Master builds stay reachable
+          # as :master and :sha-<sha>.
           tags: |
             type=ref,event=branch
             type=ref,event=tag
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push image
         uses: docker/build-push-action@v7
