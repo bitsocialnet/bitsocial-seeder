@@ -354,3 +354,125 @@ test('a votes-only seeder starts no daemon, even with autostart on and no daemon
     fs.rmSync(tmpDir, {recursive: true, force: true})
   }
 })
+
+// #8: on a combined seeder (communities *and* votes, the default config) an unreachable daemon
+// used to exit 1, which under `restart: unless-stopped` crash-looped the container and took the
+// votes half down with it — re-running the votes cold join and re-announcing to the routers on
+// every restart, for a reason the votes half had nothing to do with. The daemon is now a
+// background dependency of the community half only: votes come up immediately, the daemon is
+// retried with backoff, and the community workers start whenever it appears.
+//
+// PKC_RPC_URL points at TEST-NET-2 with autostart off, so the retry loop can never spawn a real
+// bitsocial-cli daemon on the machine running the test, however many times it goes round.
+test('a combined seeder keeps seeding votes while the daemon is unreachable', {timeout: 120_000}, async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-daemon-down-'))
+  const fakeRouter = http.createServer((request, response) => {
+    response.statusCode = 404
+    response.end()
+  })
+  const [routerPort, tcpPort, wsPort, closedKuboPort, closedChainPort, closedEthPort] =
+    await Promise.all(Array.from({length: 6}, getFreePort))
+  await new Promise<void>(resolve => fakeRouter.listen(routerPort, '127.0.0.1', () => resolve()))
+
+  const manifestPath = writeVotesManifest(tmpDir)
+  const listPath = path.join(tmpDir, 'communities.json')
+  fs.writeFileSync(listPath, JSON.stringify({communities: [{address: 'daemon-down.bso'}]}))
+
+  const child = spawn(process.execPath, [path.resolve(import.meta.dirname, '..', 'start.ts')], {
+    cwd: tmpDir,
+    env: {
+      ...process.env,
+      PKC_RPC_URL: 'ws://198.51.100.1:9138',
+      KUBO_RPC_URL: `http://127.0.0.1:${closedKuboPort}/api/v0`,
+      SEEDER_DAEMON_AUTOSTART: 'false',
+      COMMUNITY_LIST_SOURCES: listPath,
+      COMMUNITY_EXTRA_LIST_SOURCES: '',
+      VOTES_MANIFEST_SOURCES: manifestPath,
+      VOTES_HTTP_ROUTER_URLS: `http://127.0.0.1:${routerPort}`,
+      VOTES_LIBP2P_HOST: '127.0.0.1',
+      VOTES_LIBP2P_TCP_PORT: String(tcpPort),
+      VOTES_LIBP2P_WS_PORT: String(wsPort),
+      VOTES_CHAIN_RPC_URLS: JSON.stringify({base: [`http://127.0.0.1:${closedChainPort}`]}),
+      VOTES_ETH_RPC_URLS: `http://127.0.0.1:${closedEthPort}`,
+      VOTES_PEER_KEY_PATH: path.join(tmpDir, 'votes-peer.key'),
+      VOTES_BLOCKSTORE_PATH: path.join(tmpDir, 'votes-blockstore'),
+      VOTES_DATASTORE_PATH: path.join(tmpDir, 'votes-datastore'),
+      VOTES_DATA_PATH: path.join(tmpDir, 'votes-cache'),
+      SEEDER_DB_PATH: path.join(tmpDir, 'seeder.db'),
+      SEEDER_STATE_PATH: path.join(tmpDir, 'seederState.json'),
+      SEEDER_UPDATE_CHECK_ENABLED: 'false'
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  // One permanent accumulator, so `output` keeps growing after a wait resolves — the
+  // shutdown assertions below read lines printed long after the last waitForOutput().
+  let output = ''
+  const waiters = new Set<() => void>()
+  const onData = (chunk: Buffer) => {
+    output += chunk.toString()
+    for (const waiter of waiters) {
+      waiter()
+    }
+  }
+  child.stdout!.on('data', onData)
+  child.stderr!.on('data', onData)
+  const waitForOutput = (pattern: RegExp) => new Promise<void>(resolve => {
+    const check = () => {
+      if (pattern.test(output)) {
+        waiters.delete(check)
+        resolve()
+      }
+    }
+    waiters.add(check)
+    check()
+  })
+  const exited = new Promise<{code: number | null, signal: string | null}>(resolve => {
+    child.once('exit', (code, signal) => resolve({code, signal}))
+  })
+  const failIfExited = exited.then(({code, signal}): never => {
+    throw Error(`start.ts exited instead of seeding votes without a daemon (code: ${code}, signal: ${signal})\noutput:\n${output}`)
+  })
+  const timeout = (ms: number, what: string) => new Promise<never>((resolve, reject) => setTimeout(
+    () => reject(Error(`timed out waiting for ${what}\noutput:\n${output}`)),
+    ms
+  ).unref())
+
+  try {
+    // The daemon failure is reported as a retry, not as an exit.
+    await Promise.race([
+      waitForOutput(/votes seeding is unaffected; retrying in \d+s/),
+      failIfExited,
+      timeout(60_000, 'the daemon retry line')
+    ])
+    // ...and the votes half comes up anyway, which is the whole point.
+    await Promise.race([
+      waitForOutput(/seeding \d+ votes contests/),
+      failIfExited,
+      timeout(90_000, 'votes seeding')
+    ])
+
+    assert.match(output, /community seeding is DOWN, attempt 1 to reach the bitsocial daemon failed/)
+    // The community half stays parked behind the daemon: no discovery, no workers, and above
+    // all no bundled daemon spawned by the retry loop.
+    assert.doesNotMatch(output, /starting bundled bitsocial daemon/, `must not spawn a daemon\noutput:\n${output}`)
+    assert.doesNotMatch(output, /discovered \d+ communities to seed/, `discovery must wait for the daemon\noutput:\n${output}`)
+    assert.doesNotMatch(output, /seeding \d+ communities/, `community seeding must wait for the daemon\noutput:\n${output}`)
+    assert.equal(fs.existsSync(path.join(tmpDir, 'bitsocial')), false)
+
+    // SIGINT lands mid-backoff, so this also covers the retry sleep waking on abort rather
+    // than holding the process to the end of its timer.
+    child.kill('SIGINT')
+    const {code, signal} = await Promise.race([exited, timeout(30_000, 'a clean shutdown')])
+    assert.match(output, /received SIGINT, shutting down/)
+    assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
+    assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+  }
+  finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
+    await new Promise<void>(resolve => fakeRouter.close(() => resolve()))
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
+})

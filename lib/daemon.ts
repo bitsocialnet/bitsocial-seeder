@@ -226,6 +226,11 @@ const installShutdownHandlers = () => {
   })
 }
 
+// True only while a daemon this process spawned is still alive. The 'exit' handler clears
+// `bundledDaemon`, but it fires a tick late, so the child's own exit state is checked too.
+const isBundledDaemonRunning = () =>
+  Boolean(bundledDaemon && bundledDaemon.exitCode === null && bundledDaemon.signalCode === null)
+
 const startBundledDaemon = () => {
   const args = buildDaemonArgs({
     pkcRpcUrl: config.pkcRpcUrl,
@@ -266,6 +271,10 @@ const startBundledDaemon = () => {
       console.error(`bundled bitsocial daemon exited unexpectedly (code: ${code}, signal: ${signal})`)
       process.exit(code || 1)
     }
+    // Died before it was ever ready, which no longer exits the process: a combined seeder
+    // keeps its votes half alive and retries the daemon. Drop the handle so the next
+    // ensureDaemon() spawns a fresh daemon instead of waiting on this corpse forever.
+    bundledDaemon = undefined
   })
   installShutdownHandlers()
   return bundledDaemon
@@ -276,35 +285,45 @@ const waitForDaemon = async (daemonProcess: ChildProcess | undefined, timeoutMs:
   let exit: {code: number | null, signal: NodeJS.Signals | null} | undefined
   let processError: Error | undefined
   let readySince: number | undefined
-  daemonProcess?.once('error', error => {
+  // Named, and removed in the finally below: a retrying caller waits on the *same* child
+  // process once per attempt, and `once` only detaches a listener that actually fires.
+  const onProcessError = (error: Error) => {
     processError = error
-  })
-  daemonProcess?.once('exit', (code, signal) => {
-    exit = {code, signal}
-  })
-
-  while (Date.now() < deadline) {
-    const status = await checkDaemonEndpoints()
-    if (status.ready) {
-      readySince = readySince || Date.now()
-      if (Date.now() - readySince >= config.daemon.readyStableMs) {
-        daemonWasReady = true
-        return status
-      }
-    }
-    else {
-      readySince = undefined
-    }
-    if (processError) {
-      throw Error(`failed to start bundled bitsocial daemon: ${processError.message}`)
-    }
-    if (exit) {
-      throw Error(`bundled bitsocial daemon exited before it was ready (code: ${exit.code}, signal: ${exit.signal})`)
-    }
-    await sleep(1000)
   }
+  const onProcessExit = (code: number | null, signal: NodeJS.Signals | null) => {
+    exit = {code, signal}
+  }
+  daemonProcess?.once('error', onProcessError)
+  daemonProcess?.once('exit', onProcessExit)
 
-  throw Error(`timed out waiting for bitsocial daemon RPCs (${config.pkcRpcUrl}, ${config.kuboRpcUrl})`)
+  try {
+    while (Date.now() < deadline) {
+      const status = await checkDaemonEndpoints()
+      if (status.ready) {
+        readySince = readySince || Date.now()
+        if (Date.now() - readySince >= config.daemon.readyStableMs) {
+          daemonWasReady = true
+          return status
+        }
+      }
+      else {
+        readySince = undefined
+      }
+      if (processError) {
+        throw Error(`failed to start bundled bitsocial daemon: ${processError.message}`)
+      }
+      if (exit) {
+        throw Error(`bundled bitsocial daemon exited before it was ready (code: ${exit.code}, signal: ${exit.signal})`)
+      }
+      await sleep(1000)
+    }
+
+    throw Error(`timed out waiting for bitsocial daemon RPCs (${config.pkcRpcUrl}, ${config.kuboRpcUrl})`)
+  }
+  finally {
+    daemonProcess?.off('error', onProcessError)
+    daemonProcess?.off('exit', onProcessExit)
+  }
 }
 
 export const ensureDaemon = async () => {
@@ -321,6 +340,17 @@ export const ensureDaemon = async () => {
 
   if (!isLocalDaemonUrl(config.pkcRpcUrl)) {
     throw Error(`cannot autostart a daemon for non-local PKC_RPC_URL '${config.pkcRpcUrl}'`)
+  }
+
+  // A combined seeder retries this call in the background for as long as the daemon is down,
+  // and startBundledDaemon() keeps no memory of earlier calls — it just overwrites the handle
+  // with a fresh spawn. Without this guard every retry would leave another daemon running,
+  // all of them fighting over the PKC RPC port and the same data directory, and only the
+  // newest one reachable for shutdown. Checked before the pkcPortOpen branch below because a
+  // daemon we spawned ourselves is one we can watch the process of, not just poll the port of.
+  if (isBundledDaemonRunning()) {
+    console.log('bundled bitsocial daemon is already running; waiting for its RPCs')
+    return {started: false, status: await waitForDaemon(bundledDaemon, config.daemon.readyTimeoutMs)}
   }
 
   if (status.pkcPortOpen) {

@@ -54,6 +54,21 @@ const shutdown = (signum: string) => {
 process.once('SIGINT', () => shutdown('SIGINT'))
 process.once('SIGTERM', () => shutdown('SIGTERM'))
 
+// A sleep that returns early on shutdown, so a long daemon-retry backoff cannot hold the
+// process past the 5s grace window. The listener is removed on both paths: an { once: true }
+// listener is only detached by the platform when the event actually fires, and every timer
+// that expires normally would otherwise leave one behind on a process-lifetime signal.
+const sleepOrAbort = (ms: number) => new Promise<void>(resolve => {
+  let timer: NodeJS.Timeout | undefined
+  const done = () => {
+    clearTimeout(timer)
+    signal.removeEventListener('abort', done)
+    resolve()
+  }
+  timer = setTimeout(done, ms)
+  signal.addEventListener('abort', done, {once: true})
+})
+
 // --- tick queues ---
 // Each periodic task is its own queue. The scheduler fires by enqueueing a
 // row onto that queue; a worker claims, runs the function, and acks. We use
@@ -78,6 +93,15 @@ const runTickWorker = async (queue: any, workerId: string, processFn: () => any)
   }
 }
 
+// honker's scheduler is leader-elected and addressable: each entry is a row
+// in _honker_scheduler_tasks keyed by name. Calling add() again with the same
+// name is a no-op, so re-registering on every startup is safe. The leader loop
+// re-reads the table every iteration, so entries added after run() starts are
+// picked up within a heartbeat — which is what lets the community entries wait
+// for the daemon without their ticks piling up unclaimed in the meantime.
+const scheduler = db.scheduler()
+const everyS = (ms: any) => `@every ${Math.max(1, Math.floor(Number(ms) / 1000))}s`
+
 // --- update check worker (no daemon dependency, start immediately) ---
 runTickWorker(updateCheckTickQ, 'update-check-worker', async () => {
   if (config.updateCheck.enabled === false) {
@@ -89,25 +113,6 @@ runTickWorker(updateCheckTickQ, 'update-check-worker', async () => {
 
 if (config.updateCheck.enabled !== false) {
   updateCheckTickQ.enqueue({reason: 'startup'})
-}
-
-// --- ensure daemon is up (community seeding only) ---
-//
-// Only the community half talks to the daemon: it needs the PKC RPC to subscribe to
-// community updates and Kubo to pin and to run pubsub. The votes half is self-contained
-// (its own Helia node, its own blockstore, chain reads and .bso resolution straight over
-// HTTP RPC), so a votes-only seeder must neither require a daemon nor spawn one. Autostarting
-// there is actively harmful: a votes-only container restarting while the machine's real
-// daemon is down claims the PKC RPC port with a bundled daemon nothing talks to, and then the
-// real daemon cannot come back without manual intervention.
-if (communitiesEnabled) {
-  try {
-    await ensureDaemon()
-  }
-  catch (error: any) {
-    console.error(error?.message || error)
-    process.exit(1)
-  }
 }
 
 // --- votes seeding workers (no daemon dependency; lazy import so the embedded libp2p node
@@ -123,7 +128,15 @@ if (votesEnabled) {
 }
 
 // --- community seeding (skipped entirely on a votes-only seeder) ---
-if (communitiesEnabled) {
+//
+// Only the community half talks to the daemon: it needs the PKC RPC to subscribe to
+// community updates and Kubo to pin and to run pubsub. The votes half is self-contained
+// (its own Helia node, its own blockstore, chain reads and .bso resolution straight over
+// HTTP RPC), so a votes-only seeder must neither require a daemon nor spawn one. Autostarting
+// there is actively harmful: a votes-only container restarting while the machine's real
+// daemon is down claims the PKC RPC port with a bundled daemon nothing talks to, and then the
+// real daemon cannot come back without manual intervention.
+const startCommunitySeeding = async () => {
   // --- discover loop ---
   runTickWorker(discoverTickQ, 'discover-worker', () => discoverCommunitiesFromLists())
     .catch(error => console.log(`discover worker exited: ${error?.message || error}`))
@@ -138,9 +151,15 @@ if (communitiesEnabled) {
     !(seederState as {communitiesSeeding?: any[]; discoveryCompleted?: boolean}).communitiesSeeding &&
     !(seederState as {discoveryCompleted?: boolean}).discoveryCompleted
   ) {
+    if (signal.aborted) {
+      return
+    }
     console.log('no communities discovered yet, checking again in 10 seconds...')
-    await new Promise(r => setTimeout(r, 10000))
+    await sleepOrAbort(10000)
     discoverTickQ.enqueue({reason: 'startup-retry'})
+  }
+  if (signal.aborted) {
+    return
   }
 
   // --- seeding workers (lazy import so bitsocial.ts + pkc handles initialize after daemon is ready) ---
@@ -165,20 +184,10 @@ if (communitiesEnabled) {
 
   subscribeTickQ.enqueue({reason: 'startup'})
   pubsubTickQ.enqueue({reason: 'startup'})
-}
-else {
-  console.log('community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only (no bitsocial daemon needed)')
-}
 
-// --- register scheduler entries (durable periodic re-enqueue) ---
-//
-// honker's scheduler is leader-elected and addressable: each entry is a row
-// in _honker_scheduler_tasks keyed by name. Calling add() again with the same
-// name is a no-op, so re-registering on every startup is safe.
-const scheduler = db.scheduler()
-const everyS = (ms: any) => `@every ${Math.max(1, Math.floor(Number(ms) / 1000))}s`
-
-if (communitiesEnabled) {
+  // Registered here, not at boot: the scheduler starts before the daemon is up on a combined
+  // seeder, and entries added while nothing is claiming their queues would just pile ticks up
+  // and then run them all at once. The scheduler picks these up within a heartbeat.
   scheduler.add({
     name: 'discover-tick',
     queue: 'discover-tick',
@@ -198,6 +207,69 @@ if (communitiesEnabled) {
     payload: {}
   })
 }
+
+// Retry rather than give up: ensureDaemon() is one-shot — with autostart off it throws the
+// moment the RPCs are unreachable, and with autostart on it gives up after readyTimeoutMs. A
+// single background attempt would leave community seeding dead for the process lifetime after
+// one blip, with no exit for the supervisor to restart. Backs off because the ready probe
+// opens a real WebSocket and sends a subscribe, so a tight loop would hammer a daemon that is
+// merely slow to boot. ensureDaemon() is safe to call repeatedly: it reuses a bundled daemon
+// it already spawned instead of starting a second one.
+const daemonRetryBaseMs = 10 * 1000
+const daemonRetryMaxMs = 5 * 60 * 1000
+const waitForDaemonWithBackoff = async () => {
+  for (let attempt = 1; !signal.aborted; attempt++) {
+    try {
+      await ensureDaemon()
+      return true
+    }
+    catch (error: any) {
+      if (signal.aborted) {
+        return false
+      }
+      const waitMs = Math.min(daemonRetryMaxMs, daemonRetryBaseMs * 2 ** Math.min(attempt - 1, 5))
+      console.error(`community seeding is DOWN, attempt ${attempt} to reach the bitsocial daemon failed: ${error?.message || error} — votes seeding is unaffected; retrying in ${Math.round(waitMs / 1000)}s`)
+      await sleepOrAbort(waitMs)
+    }
+  }
+  return false
+}
+
+if (communitiesEnabled && votesEnabled) {
+  // A combined seeder must not let a daemon outage take down a votes half that needs no
+  // daemon at all. Exiting here used to crash-loop the container under `restart:
+  // unless-stopped`, and every restart re-ran the votes cold join and re-announced to the
+  // routers — degrading the votes seeding this machine exists to provide, for a reason
+  // unrelated to it. So: keep serving what we can, and bring the community half up whenever
+  // the daemon shows up.
+  waitForDaemonWithBackoff()
+    .then(async ready => {
+      if (ready) {
+        await startCommunitySeeding()
+      }
+    })
+    .catch(error => console.error(`community seeding failed to start: ${error?.message || error}`))
+}
+else if (communitiesEnabled) {
+  // Communities-only: nothing would be left running, so fail fast and let the supervisor
+  // restart us. That is a clearer signal than idling with no daemon and nothing to seed.
+  try {
+    await ensureDaemon()
+  }
+  catch (error: any) {
+    console.error(error?.message || error)
+    process.exit(1)
+  }
+  await startCommunitySeeding()
+}
+else {
+  console.log('community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only (no bitsocial daemon needed)')
+}
+
+// --- register scheduler entries (durable periodic re-enqueue) ---
+//
+// The community entries are registered by startCommunitySeeding() instead of here, because
+// they must not fire before the workers that drain their queues exist.
 if (config.updateCheck.enabled !== false) {
   scheduler.add({
     name: 'update-check-tick',
