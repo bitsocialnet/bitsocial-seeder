@@ -102,6 +102,11 @@ const writeVotesManifest = (tmpDir: string) => {
 // The fix lives in pubsub-voting — this repo only passes httpRouterUrls into the announcer and
 // never builds or signs the record. This test guards the integration: whatever the library puts
 // on the wire has to survive a router that checks. It fails against 0.6.0 and passes from 0.6.1.
+//
+// Why the library announces at all, rather than Helia doing it: Routing V1 has no standardized
+// provider-write path yet (IPIP-0526, ipfs/specs#526, still an open PR), so the delegated
+// routing client's provide() is a no-op and this node runs no DHT. Without the library's
+// announcer nothing would publish this seeder at all. See lib/votes/node.ts.
 test('votes announces carry a signature a verifying router accepts', {timeout: 120_000}, async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-announce-'))
   const router = createVerifyingRouter()

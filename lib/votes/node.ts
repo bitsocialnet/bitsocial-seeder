@@ -39,6 +39,16 @@ import {multiaddr} from '@multiformats/multiaddr'
 //
 // The delegated Routing V1 clients double as the node's content routers, so the voter's
 // cold-join findProviders() queries the same routers pkc-js clients use.
+//
+// Read-only, though: they answer findProviders(), they never publish this node. Routing V1
+// has no standardized provider-write path yet — IPIP-0526 (Historic Bitswap Provider
+// Publishing API, ipfs/specs#526) is still an open PR — so @helia/delegated-routing-v1-http-
+// api-client implements `provide()` as an explicit no-op, and this node runs no DHT to fall
+// back on (announcing over HTTP instead of the DHT is the whole point of pkc-http-router:
+// browsers cannot participate in the DHT). Calling helia.libp2p.contentRouting.provide()
+// here would therefore succeed and publish nothing at all. @bitsocial/pubsub-voting carries
+// its own announcer to cover that gap — see its transport/announce — which is why this node
+// is discoverable by browsers despite the stack having no working provide path.
 
 // The votes peer id persists across restarts so the provider records announced to the
 // routers stay valid (a fresh id every boot would leave stale records dangling for their
