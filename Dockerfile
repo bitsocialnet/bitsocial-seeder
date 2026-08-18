@@ -10,7 +10,17 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev \
+# @bitsocial/bitsocial-cli's postinstall downloads the web UIs from the GitHub releases API
+# and hard-errors when it gets none. Unauthenticated that API allows 60 requests/hour per IP,
+# which CI shares with every other runner, so back-to-back builds (a merge fires the PR run
+# and the master run within minutes) intermittently got 403s and failed the image build.
+# The postinstall sends `authorization: Bearer $GITHUB_TOKEN` when the variable is set, which
+# raises the limit to 1000/hour. A secret mount keeps the token out of the image layers and
+# out of the layer cache key; without one (a plain local `docker build`) it stays unset and
+# the build behaves exactly as it did before.
+RUN --mount=type=secret,id=github_token \
+  GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+  npm ci --omit=dev \
   && npm cache clean --force
 
 FROM node:24-bookworm-slim AS runtime
