@@ -1,7 +1,7 @@
 {
   "name": "@bitsocial/bitsocial-seeder",
   "type": "module",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "description": "Seed Bitsocial community pages and pubsub topics through a Bitsocial CLI daemon.",
   "keywords": [
     "bitsocial",

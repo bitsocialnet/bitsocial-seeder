@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.5](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.4...v0.10.5) (2026-08-18)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.5`
+
+### Changes
+
+- test(votes): reproduce the unsigned provider announce rejected by verifying routers ([11863d5](https://github.com/bitsocialnet/bitsocial-seeder/commit/11863d5172579306898c7d5c9b7712f55a10bd39))
+- fix(deps): upgrade @bitsocial/pubsub-voting to 0.6.1, signing provider announces ([2b2f566](https://github.com/bitsocialnet/bitsocial-seeder/commit/2b2f566dd96e2eeb300b734eb9c317cb9be0aa93))
+- docs(votes): record why the announcer exists (no Routing V1 provider-write yet) ([9a888e5](https://github.com/bitsocialnet/bitsocial-seeder/commit/9a888e54e2978304d1bc344bb1a107c196e5629d))
+- test(votes): check Payload.Timestamp the way the router does ([b876051](https://github.com/bitsocialnet/bitsocial-seeder/commit/b8760514b0709d7f8b65df752cee1c919b75459f))
+
 ## [0.10.4](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.3...v0.10.4) (2026-08-18)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.4`
