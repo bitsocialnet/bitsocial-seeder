@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.2...v0.10.3) (2026-08-18)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.3`
+
+### Changes
+
+- ci(release): make the release job the only publisher of :latest ([8623b64](https://github.com/bitsocialnet/bitsocial-seeder/commit/8623b64f98ce0ac55c5fbb81d0fb4abcae2c9c83))
+- chore: ignore the .tmp release-notes scratch directory ([5c11a2d](https://github.com/bitsocialnet/bitsocial-seeder/commit/5c11a2d2a23cf02acd5d70503f57ab21505ff115))
+
 ## [0.10.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.0...v0.10.2) (2026-08-18)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.2`
