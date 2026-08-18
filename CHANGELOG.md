@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.4](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.3...v0.10.4) (2026-08-18)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.4`
+
+### Changes
+
+- chore(deps): upgrade @bitsocial/pubsub-voting to 0.6.0 ([4a6d026](https://github.com/bitsocialnet/bitsocial-seeder/commit/4a6d026137ab3933dd83090bc0e9e0db58d61b46))
+- test(votes): match multiaddr ports as components, not substrings ([c1359a0](https://github.com/bitsocialnet/bitsocial-seeder/commit/c1359a0a9a63c737b5b46585c47f4574516af4ae))
+- ci(docker): authenticate the web UI downloads in the image build ([52f7ee8](https://github.com/bitsocialnet/bitsocial-seeder/commit/52f7ee861d50139f15ec0f9bccde72943acbd184))
+- fix(daemon): keep seeding votes when a combined seeder's daemon is down ([3699cef](https://github.com/bitsocialnet/bitsocial-seeder/commit/3699cef0a9b9a501505f35321fd7bf2633dca88b))
+
 ## [0.10.3](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.2...v0.10.3) (2026-08-18)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.3`
