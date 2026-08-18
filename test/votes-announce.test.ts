@@ -93,18 +93,16 @@ const writeVotesManifest = (tmpDir: string) => {
   return manifestPath
 }
 
-// Regression test for bitsocialnet/pubsub-voting#38, reproduced on production (new-plebbit):
-// @bitsocial/pubsub-voting's announcer sends an unsigned provider record, so every router that
-// verifies signatures answers 403 and the seeder is absent from them. Four of the six default
-// routers verify; the seeder was findable only on the two that do not.
+// Regression test for bitsocialnet/pubsub-voting#38, found on production (new-plebbit): the
+// announcer used to send an unsigned provider record, so every router that verifies signatures
+// answered 403 and the seeder was absent from it. Four of the six default routers verify; the
+// seeder was findable only on the two that do not. Fixed upstream in pubsub-voting 0.6.1, which
+// signs the payload and stamps it.
 //
-// The fix belongs in pubsub-voting — this repo only passes httpRouterUrls into the announcer and
+// The fix lives in pubsub-voting — this repo only passes httpRouterUrls into the announcer and
 // never builds or signs the record. This test guards the integration: whatever the library puts
-// on the wire has to survive a router that checks.
-//
-// Marked todo until the upstream fix ships, so it reproduces the bug without failing CI. Drop the
-// flag once the announcer signs, and it becomes an ordinary regression test.
-test('votes announces carry a signature a verifying router accepts', {timeout: 120_000, todo: 'blocked on bitsocialnet/pubsub-voting#38'}, async () => {
+// on the wire has to survive a router that checks. It fails against 0.6.0 and passes from 0.6.1.
+test('votes announces carry a signature a verifying router accepts', {timeout: 120_000}, async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-announce-'))
   const router = createVerifyingRouter()
   const [routerPort, tcpPort, wsPort, closedKuboPort, closedChainPort, closedEthPort] =
@@ -172,12 +170,17 @@ test('votes announces carry a signature a verifying router accepts', {timeout: 1
     assert.ok(provider.Payload?.ID, 'announce carried no Payload.ID')
     assert.ok(Array.isArray(provider.Payload?.Keys) && provider.Payload.Keys.length > 0, 'announce carried no Keys')
 
-    // The two fields a verifying router requires, and the reason it 403s today.
+    // The two fields a verifying router requires, and what 0.6.0 left out.
     assert.ok(
       typeof provider.Signature === 'string' && provider.Signature.length > 0,
       `announce is unsigned, so a verifying router rejects it with 403 (pubsub-voting#38): ${JSON.stringify(provider)}`
     )
-    assert.notEqual(provider.Payload?.Timestamp, undefined, 'announce carried no Payload.Timestamp')
+    // Stamped fresh per announce, not cached: the router bounds it for replay (24h stale,
+    // 1h skew), so a record carrying a build-time or join-time constant would start failing.
+    assert.ok(
+      Number.isFinite(provider.Payload?.Timestamp) || typeof provider.Payload?.Timestamp === 'string',
+      `announce carried no usable Payload.Timestamp: ${JSON.stringify(provider.Payload)}`
+    )
 
     // And the seeder must not be logging announce failures against a router that verifies.
     assert.doesNotMatch(output, /provider announce to router .* failed/, `announce was rejected\noutput:\n${output}`)
