@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.2](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.0...v0.10.2) (2026-08-18)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.2`
+
+### Changes
+
+- chore(deps): bump bitsocial-cli to 0.19.92 and pkc-js to 0.0.83 ([d02d993](https://github.com/bitsocialnet/bitsocial-seeder/commit/d02d9939c31cf99feb99a7341b8813e4466c4692))
+- chore(deps): upgrade honker-node to 0.4.5, drop patch-package ([029e584](https://github.com/bitsocialnet/bitsocial-seeder/commit/029e5843f3fcc4a0d6a30d391819040c4b32a089))
+- fix(docker): drop patches COPY, add libsqlite3 for honker 0.4.5 ([167ccc6](https://github.com/bitsocialnet/bitsocial-seeder/commit/167ccc6288d817093d7dce9d0515810155939537))
+- chore(deps): upgrade bitsocial-cli, pkc-js and honker-node, release 0.10.1 ([5fba06d](https://github.com/bitsocialnet/bitsocial-seeder/commit/5fba06da51fb1975495aeddbebf4b0c45dd1e488))
+- ci(release): derive the version from conventional commits ([8de0c4b](https://github.com/bitsocialnet/bitsocial-seeder/commit/8de0c4b2168585e2257aad5d2cbab09d60c8fdb7))
+
 ## [0.10.0](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.9.0...v0.10.0) (2026-08-17)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.0`
