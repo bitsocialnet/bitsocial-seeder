@@ -25,6 +25,21 @@ const KUBO_ADDRESSES = [
   '/ip4/203.0.113.7/udp/4001/quic-v1'
 ]
 
+// Match multiaddr components WHOLE, never as substrings. `addr.includes('/tcp/4001')` also
+// matches an ephemeral /tcp/40015/ws — and 40010-40019 sits inside Linux's default ephemeral
+// range (32768-60999), so roughly one run in 1400 drew such a port for tcpPort or wsPort and
+// failed the borrow assertion below against the node's OWN listen addr. That is what CI run
+// 32099405624 hit, on wsPort 40015; it is a prefix collision, not a timing race.
+const componentsOf = (addr: string) => addr.split('/')
+const hasPort = (addr: string, port: number) => {
+  const parts = componentsOf(addr)
+  return parts.some((part, i) => parts[i - 1] === 'tcp' && part === String(port))
+}
+const hasIp = (addr: string, ip: string) => {
+  const parts = componentsOf(addr)
+  return parts.some((part, i) => parts[i - 1] === 'ip4' && part === ip)
+}
+
 const votesConfigFor = (dataDir: string, tcpPort: number, wsPort: number) => ({
   listenHost: '127.0.0.1',
   tcpPort,
@@ -94,7 +109,7 @@ test('createVotesNode persists its identity and can borrow the daemon Kubo publi
     )
     // Kubo's own ports are never announced as ours, and its private addrs never leak.
     assert.ok(
-      !borrowed.some(addr => addr.includes('/tcp/4001') || addr.includes('192.168.1.5') || addr.includes('172.31.0.1')),
+      !borrowed.some(addr => hasPort(addr, 4001) || hasIp(addr, '192.168.1.5') || hasIp(addr, '172.31.0.1')),
       `borrowed the wrong addrs: ${borrowed.join(' ')}`
     )
 

@@ -153,7 +153,7 @@ VOTES_MANIFEST_SOURCES=none docker compose up -d
 
 With a manifest configured the seeder starts an embedded libp2p/Helia node for the votes mesh — the daemon's Kubo cannot fill this role over RPC (no topic validators, no peer scoring, no libp2p-fetch registration), so votes seeding is **Helia-only**: verified vote bundles and checkpoint chunks persist in the node's own on-disk blockstore (`VOTES_BLOCKSTORE_PATH`), and each contest's checkpoint snapshot persists under `VOTES_DATA_PATH` so a restart keeps the tally, with no Kubo involvement. The seeder then:
 
-- joins every derived contest read-only (no signer, no voting) and keeps the set reconciled against the manifests every `VOTES_RECONCILE_INTERVAL_MS`,
+- joins every derived contest read-only (it never publishes a ballot, so it carries no voting identity at all) and keeps the set reconciled against the manifests every `VOTES_RECONCILE_INTERVAL_MS`,
 - serves checkpoint root records over libp2p-fetch to cold-joining voters (this registration is automatic on join),
 - announces its votes peer as the provider of each contest's criteria CID, checkpoint root, and chunk CIDs on the Routing V1 HTTP routers (`VOTES_HTTP_ROUTER_URLS`), which is how voters' `findProviders()` discovers it — the library's built-in announcer re-announces hourly and debounces on joins and checkpoint changes.
 

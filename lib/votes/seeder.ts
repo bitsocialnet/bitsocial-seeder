@@ -10,7 +10,7 @@ import {loadVotesCriteria} from './manifest.ts'
 import {describeLiveBundle, describeRootHeartbeat, describeRootRecord, parseGossipMessage} from './wire-log.ts'
 
 // Seed pubsub-voting contests: derive every configured directory manifest into criteria
-// documents, join each contest read-only (no signer), and keep the set reconciled. Joining is
+// documents, join each contest as a read-only view, and keep the set reconciled. Joining is
 // all a seeder is — the library's checkpoint fetch responder registers itself on the first
 // joined topic, verified bundles persist into the node's on-disk blockstore and serve over
 // bitswap, root-record heartbeats answer live sync, the checkpoint snapshot persists under
@@ -184,6 +184,10 @@ const ensureVoter = async () => {
   addNodeDiagnostics(helia)
   registerKuboPeersHint(helia)
   startKuboRefresh(helia)
+  // Read-only by construction, with nothing to opt out of: a voter has no identity of its
+  // own since pubsub-voting 0.6.0 — the signer is a per-ballot argument to
+  // createContestVote, which a seeder never calls. createContest (joinContest, below) is the
+  // whole read side and takes no identity at all.
   voter = new PubsubVoter({
     helia,
     chains: chainClientFactory,
@@ -194,7 +198,6 @@ const ensureVoter = async () => {
     nameResolvers: createBsoResolvers(config.votes.ethRpcUrls),
     dataPath: config.votes.dataPath,
     httpRouterUrls: config.votes.httpRouterUrls
-    // no signer: a seeder is read-only
   })
   console.log(`votes node started, peer ${helia.libp2p.peerId.toString()}, listening ${helia.libp2p.getMultiaddrs().map(String).join(' ')}`)
   // Surface the announced addrs whenever they change — this is where the AutoTLS
