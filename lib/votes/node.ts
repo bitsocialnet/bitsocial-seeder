@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
 import {randomBytes} from 'crypto'
-import {createLibp2p} from 'libp2p'
 import {tcp} from '@libp2p/tcp'
 import {webSockets} from '@libp2p/websockets'
 import {noise} from '@chainsafe/libp2p-noise'
@@ -14,8 +13,10 @@ import {http} from '@libp2p/http'
 import {autoNAT} from '@libp2p/autonat'
 import {bootstrap} from '@libp2p/bootstrap'
 import {autoTLS} from '@ipshipyard/libp2p-auto-tls'
-import {delegatedRoutingV1HttpApiClient} from '@helia/delegated-routing-v1-http-api-client'
-import {createHelia} from 'helia'
+import {delegatedRoutingV1HttpApiClientContentRouting} from '@helia/delegated-routing-v1-http-api-client'
+import {createHeliaLight} from 'helia'
+import {withLibp2pLight} from '@helia/libp2p'
+import {withBitswap} from '@helia/bitswap'
 import {FsBlockstore} from 'blockstore-fs'
 import {FsDatastore} from 'datastore-fs'
 import {generateKeyPair, privateKeyFromProtobuf, privateKeyToProtobuf} from '@libp2p/crypto/keys'
@@ -150,8 +151,12 @@ export const createVotesNode = async ({votesConfig, log = console.log}: {votesCo
     // creates a certless https server that rejects every handshake (TLS alert 40) forever.
     listen.push(`/ip4/${listenHost}/tcp/${wsPort}/ws`)
   }
+  // Client v9 split the libp2p capability wrappers out: the bare delegatedRoutingV1HttpApiClient
+  // service no longer carries contentRoutingSymbol (libp2p would see no content routers and
+  // findProviders() would silently answer nothing) — the ContentRouting variant is what wires
+  // libp2p.contentRouting to the routers.
   const routers = Object.fromEntries(
-    httpRouterUrls.map((url: string, i: number) => [`delegatedRouting${i}`, delegatedRoutingV1HttpApiClient({url})])
+    httpRouterUrls.map((url: string, i: number) => [`delegatedRouting${i}`, delegatedRoutingV1HttpApiClientContentRouting({url})])
   )
   const services = {
     ...routers,
@@ -182,7 +187,11 @@ export const createVotesNode = async ({votesConfig, log = console.log}: {votesCo
     autoNAT: autoNAT(),
     autoTLS: autoTLS({autoConfirmAddress: true})
   }
-  const libp2p: any = await createLibp2p({
+  // Helia 7 no longer takes a pre-built libp2p instance — libp2p is created lazily inside
+  // helia.start() from the options handed to withLibp2pLight (the Light variant adds no
+  // default services, so the map above stays the whole story). withBitswap wires the block
+  // broker that serves checkpoint blocks to cold-joining voters.
+  const helia: any = withBitswap(withLibp2pLight(createHeliaLight({blockstore: new FsBlockstore(blockstorePath)}), {
     privateKey: await loadOrCreatePeerKey(peerKeyPath),
     // Persists the AutoTLS certificate (and keychain) so restarts don't re-run ACME.
     datastore: new FsDatastore(datastorePath),
@@ -197,18 +206,19 @@ export const createVotesNode = async ({votesConfig, log = console.log}: {votesCo
     streamMuxers: [yamux()],
     peerDiscovery: [bootstrap({list: BOOTSTRAP_PEERS})],
     services
-  } as any)
-  libp2p.addEventListener('certificate:provision', () => {
-    log('votes node: AutoTLS certificate provisioned')
-  })
+  } as any))
   log('votes node: waiting for AutoNAT to confirm the public address, then AutoTLS provisions the certificate (a few minutes on first run)')
   try {
-    return await createHelia({libp2p, blockstore: new FsBlockstore(blockstorePath)})
+    await helia.start()
   }
   catch (error) {
-    // createHelia doesn't stop a supplied libp2p on failure — leaked, it keeps holding the
-    // votes ports and every retried tick then dies on EADDRINUSE until a restart.
-    await libp2p.stop().catch(() => {})
+    // helia 7's start() has no rollback — a mixin failing mid-start leaves libp2p holding
+    // the votes ports, and every retried tick then dies on EADDRINUSE until a restart.
+    await helia.stop().catch(() => {})
     throw error
   }
+  helia.libp2p.addEventListener('certificate:provision', () => {
+    log('votes node: AutoTLS certificate provisioned')
+  })
+  return helia
 }
