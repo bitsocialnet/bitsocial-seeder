@@ -38,7 +38,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.92",
+    "@bitsocial/bitsocial-cli": "0.19.94",
     "@bitsocial/pubsub-voting": "0.7.0",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
@@ -58,7 +58,7 @@
     "@libp2p/tcp": "11.0.27",
     "@libp2p/websockets": "10.1.20",
     "@multiformats/multiaddr": "13.0.3",
-    "@pkcprotocol/pkc-js": "0.0.83",
+    "@pkcprotocol/pkc-js": "0.0.85",
     "@russellthehippo/honker-node": "0.4.5",
     "blockstore-fs": "4.0.1",
     "datastore-fs": "12.0.1",
