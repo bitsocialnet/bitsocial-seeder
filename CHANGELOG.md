@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.6](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.5...v0.10.6) (2026-09-01)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.6`
+
+### Changes
+
+- fix(deps): upgrade @bitsocial/pubsub-voting to 0.7.0 (helia 7 / gossipsub 17 votes node) ([ba7f2a3](https://github.com/bitsocialnet/bitsocial-seeder/commit/ba7f2a3a83d914f433a48289f1890b212670460f))
+- fix(deps): upgrade bitsocial-cli to 0.19.94 and pkc-js to 0.0.85 ([a1a1704](https://github.com/bitsocialnet/bitsocial-seeder/commit/a1a17044c801b2c0d310a8ae77049093ea8938e5))
+
 ## [0.10.5](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.4...v0.10.5) (2026-08-18)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.5`
