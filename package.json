@@ -87,5 +87,23 @@
     "@types/node": "24.13.3",
     "release-it": "19.2.4",
     "typescript": "7.0.2"
+  },
+  "overrides": {
+    "body-parser": "1.20.6",
+    "brace-expansion@2": "2.1.4",
+    "browserslist": "4.28.7",
+    "cookie@<0.7.0": "0.7.0",
+    "express": "4.20.0",
+    "nanoid": "5.1.16",
+    "path-to-regexp@0.1": "0.1.13",
+    "protobufjs@6": "7.6.5",
+    "qs": "6.16.0",
+    "send": "0.19.0",
+    "serve-static@<1.16.0": "1.16.0",
+    "undici@6": "6.28.0",
+    "undici@7": "7.29.0",
+    "undici@8": "8.9.0",
+    "uuid@13": "13.0.1",
+    "ws@8": "8.21.0"
   }
 }
