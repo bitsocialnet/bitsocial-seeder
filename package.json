@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@bitsocial/bitsocial-cli": "0.19.94",
-    "@bitsocial/pubsub-voting": "0.7.0",
+    "@bitsocial/pubsub-voting": "0.7.4",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
     "@helia/bitswap": "4.0.14",
