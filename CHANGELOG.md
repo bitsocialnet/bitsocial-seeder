@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.7](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.6...v0.10.7) (2026-09-03)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.7`
+
+### Changes
+
+- fix(deps): upgrade @bitsocial/pubsub-voting to 0.7.4 ([63b5084](https://github.com/bitsocialnet/bitsocial-seeder/commit/63b5084ee04894846f6581a9f8138d1830530404))
+
 ## [0.10.6](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.5...v0.10.6) (2026-09-01)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.6`
