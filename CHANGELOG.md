@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.8](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.7...v0.10.8) (2026-09-22)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.8`
+
+### Changes
+
+- chore(deps): remediate security alerts [skip github-alerts] ([51a7d4f](https://github.com/bitsocialnet/bitsocial-seeder/commit/51a7d4f8592111cc5be08b1a45e38fee11bd3199))
+- fix: cap default community seeding and reclaim obsolete vote blocks ([08b8eca](https://github.com/bitsocialnet/bitsocial-seeder/commit/08b8eca4c1f5b5ab3ffd58bbb7338acb15ab0633))
+
 ## [0.10.7](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.6...v0.10.7) (2026-09-03)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.7`
