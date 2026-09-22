@@ -9,7 +9,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
+COPY package.json npm-shrinkwrap.json ./
 # @bitsocial/bitsocial-cli's postinstall downloads the web UIs from the GitHub releases API
 # and hard-errors when it gets none. Unauthenticated that API allows 60 requests/hour per IP,
 # which CI shares with every other runner, so back-to-back builds (a merge fires the PR run

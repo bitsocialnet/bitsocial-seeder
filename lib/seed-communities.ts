@@ -1,5 +1,5 @@
 import config from '../config.ts'
-import {getCommunityKey, getCommunityLookup} from './utils.ts'
+import {reconcileCommunitySubscriptions} from './community-subscriptions.ts'
 import {getCommunityPubsubTopicRoutingPins} from './community-cids.ts'
 import seederState from './seeder-state.ts'
 import {kubo, kuboPubsub, pkc} from './bitsocial.ts'
@@ -28,25 +28,13 @@ const pubsubTopicsJoined: {[pubsubTopic: string]: {community: any, unsubscribe: 
 export const subscribeCommunitiesUpdates = async () => {
   const seeding = seederState.communitiesSeeding || []
   console.log(`seeding ${seeding.length} communities`)
-  for (const communityEntry of seeding) {
-    const communityKey = getCommunityKey(communityEntry)
-    if (communitiesUpdating[communityKey]) {
-      continue
-    }
-    pkc.createCommunity(getCommunityLookup(communityEntry)).then(async community => {
-      communitiesUpdating[communityKey] = community
-      community.on('update', () => {
-        communitiesUpdating[communityKey] = community
-        try {
-          handleCommunityUpdate(community, communityKey)
-        }
-        catch (error) {
-          logErrorMessage(community.address)(error)
-        }
-      })
-      await community.update()
-    }).catch(console.log)
-  }
+  await reconcileCommunitySubscriptions({
+    seeding,
+    updating: communitiesUpdating,
+    createCommunity: lookup => pkc.createCommunity(lookup),
+    onUpdate: handleCommunityUpdate,
+    onError: console.log
+  })
 }
 
 export const providePubsubTopicRoutingCids = async () => {

@@ -30,11 +30,9 @@ test('caps only the public lists, never the extra lists', () => {
     maxCommunities: 1
   })
 
-  assert.deepEqual(communities.map(community => community.address), [
-    'public-1.bso',
-    'extra-1.bso',
-    'extra-2.bso'
-  ])
+  assert.equal(communities.length, 3)
+  assert.match(communities[0].address, /^public-/)
+  assert.deepEqual(communities.slice(1).map(community => community.address), ['extra-1.bso', 'extra-2.bso'])
 })
 
 test('an unset cap keeps every public community', () => {

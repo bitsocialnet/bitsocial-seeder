@@ -17,7 +17,7 @@ import {delegatedRoutingV1HttpApiClientContentRouting} from '@helia/delegated-ro
 import {createHeliaLight} from 'helia'
 import {withLibp2pLight} from '@helia/libp2p'
 import {withBitswap} from '@helia/bitswap'
-import {FsBlockstore} from 'blockstore-fs'
+import {VotesBlockstore} from './blockstore.ts'
 import {FsDatastore} from 'datastore-fs'
 import {generateKeyPair, privateKeyFromProtobuf, privateKeyToProtobuf} from '@libp2p/crypto/keys'
 import {multiaddr} from '@multiformats/multiaddr'
@@ -191,7 +191,9 @@ export const createVotesNode = async ({votesConfig, log = console.log}: {votesCo
   // helia.start() from the options handed to withLibp2pLight (the Light variant adds no
   // default services, so the map above stays the whole story). withBitswap wires the block
   // broker that serves checkpoint blocks to cold-joining voters.
-  const helia: any = withBitswap(withLibp2pLight(createHeliaLight({blockstore: new FsBlockstore(blockstorePath)}), {
+  const votesBlockstore = new VotesBlockstore(blockstorePath)
+  await votesBlockstore.open()
+  const helia: any = withBitswap(withLibp2pLight(createHeliaLight({blockstore: votesBlockstore}), {
     privateKey: await loadOrCreatePeerKey(peerKeyPath),
     // Persists the AutoTLS certificate (and keychain) so restarts don't re-run ACME.
     datastore: new FsDatastore(datastorePath),
@@ -220,5 +222,6 @@ export const createVotesNode = async ({votesConfig, log = console.log}: {votesCo
   helia.libp2p.addEventListener('certificate:provision', () => {
     log('votes node: AutoTLS certificate provisioned')
   })
+  helia.votesBlockstore = votesBlockstore
   return helia
 }

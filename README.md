@@ -55,12 +55,12 @@ Votes seeding starts an embedded libp2p node that wants two open ports (`6742`/`
 
 Directory voting is still on **testnet** — the contests are gated by the `5chan Pass` ERC-721 on Base Sepolia, so seeding them costs only the node and some testnet RPC reads.
 
-**3. (Optional) Cap the workload on small VPSes:**
+**3. (Optional) Adjust the workload on small VPSes:**
 
-By default there is no cap — the seeder seeds every community in the configured public lists:
+The default is 10 public communities. Lower the cap for a smaller machine, or raise it to contribute more capacity:
 
 ```sh
-MAX_COMMUNITIES=10 PIN_CONCURRENCY=1 docker compose up -d
+MAX_COMMUNITIES=5 PIN_CONCURRENCY=1 docker compose up -d
 ```
 
 See [VPS Sizing](#vps-sizing) for capacity guidance.
@@ -69,13 +69,13 @@ Compose pulls `ghcr.io/bitsocialnet/bitsocial-seeder:latest` by default. To pin 
 
 ### Run without Docker (npm)
 
-For local testing or Node-first operators (Node 24+ required):
+For local testing or Node-first operators (Node 24+ and npm 11 required):
 
 ```sh
 npx @bitsocial/bitsocial-seeder
 ```
 
-Or install globally:
+Or install globally with Node.js 24+ and npm 11:
 
 ```sh
 npm install -g @bitsocial/bitsocial-seeder
@@ -83,6 +83,11 @@ bitsocial-seeder
 ```
 
 Same environment variables as the Docker image. Reuses an already-running Bitsocial daemon when one is reachable, otherwise starts the bundled one.
+
+Use npm 11 for npm installs and local development. The published package includes
+`npm-shrinkwrap.json` to preserve its tested security fixes;
+[npm 12 no longer honors published shrinkwrap files](https://github.com/npm/cli/blob/latest/docs/lib/content/configuring-npm/package-lock-json.md#npm-shrinkwrapjson).
+Docker includes the supported npm version.
 
 ### Updating
 
@@ -123,7 +128,9 @@ Example `/data/extra-communities.json`:
 {"communities": [{"address": "my-community.bso", "publicKey": "12D3KooW..."}]}
 ```
 
-Extra sources use the same format as `COMMUNITY_LIST_SOURCES`, can be URLs, files, or directories of JSON files, and are re-read on the normal discovery interval. `MAX_COMMUNITIES` caps only the public list entries; explicitly configured extra communities are always included. If an extra entry has the same `publicKey` or address as a public entry, the extra entry wins.
+Extra sources use the same format as `COMMUNITY_LIST_SOURCES`, can be URLs, files, or directories of JSON files, and are re-read on the normal discovery interval. `MAX_COMMUNITIES` defaults to 10 and caps only the public list entries; explicitly configured extra communities are always included. If an extra entry has the same `publicKey` or address as a public entry, the extra entry wins.
+
+Set `MAX_COMMUNITIES=unlimited` to seed every public community, or `MAX_COMMUNITIES=0` to seed only extras. Unset or empty uses 10; invalid values fail startup. When the public list exceeds the cap, communities are ranked by a hash of their identity and a random seed persisted in `SEEDER_DB_PATH`. Selection survives restarts and list reordering, while independent nodes spread coverage across the list. Copying the database also copies this selection seed. Startup waits for successful discovery before subscribing, so an older uncapped selection is not restored before the new limit applies. Subscriptions to communities removed from selection stop on the next subscription tick. The cap does not limit votes contests or reclaim previously pinned community data.
 
 ### Verify what's being seeded
 
@@ -242,8 +249,8 @@ SEEDER_DB_PATH=/data/seeder.db
 # be disabled with SEEDER_STATE_WRITE_FILE=false
 SEEDER_STATE_PATH=/data/seederState.json
 SEEDER_STATE_WRITE_FILE=true
-# No default cap — all discovered public-list communities are seeded unless this is set
-MAX_COMMUNITIES=
+# Default 10 public communities; use "unlimited" to opt out or 0 for extras only
+MAX_COMMUNITIES=10
 # Default 2; the Docker image and compose file set 1
 PIN_CONCURRENCY=2
 SEEDER_UPDATE_CHECK_ENABLED=true
@@ -261,6 +268,8 @@ VOTES_CHAIN_RPC_URLS='{"84532":["https://sepolia.base.org"]}'
 VOTES_ETH_RPC_URLS=https://eth.drpc.org,https://ethereum-rpc.publicnode.com
 VOTES_PEER_KEY_PATH=/data/votes-peer.key
 VOTES_BLOCKSTORE_PATH=/data/votes-blockstore
+# Unreferenced and unused for 24 hours before deletion; 0 disables votes blockstore GC
+VOTES_BLOCKSTORE_GC_GRACE_MS=86400000
 VOTES_DATASTORE_PATH=/data/votes-datastore
 VOTES_DATA_PATH=/data/votes-cache
 VOTES_FETCH_MAX_STREAMS=256
@@ -268,6 +277,23 @@ VOTES_UPDATE_CONCURRENCY=8
 # util.inspect depth for object logging (unset = Node's util.inspect default)
 DEBUG_DEPTH=6
 ```
+
+### Votes blockstore garbage collection
+
+On each manifest reconcile, the seeder scans its dedicated votes blockstore. A block is
+eligible for deletion only after it stays unreferenced and unused for
+`VOTES_BLOCKSTORE_GC_GRACE_MS` (default 24 hours); set this to `0` to disable GC. Restarts
+reset the grace period. Live checkpoint roots/chunks and admitted bundles, including votes
+awaiting verification, are retained through the voting library's `retainsBlock()` API.
+References are checked again under a per-block lock immediately before deletion, and
+reads/writes reset eligibility. This reclaims old checkpoints, dropped contests' blocks,
+and unused fetched blocks without touching the separate checkpoint snapshots in `VOTES_DATA_PATH`.
+
+The bundled voting library exposes the live references used by GC. Keep
+`VOTES_BLOCKSTORE_PATH` dedicated to this seeder and
+never share it with another process or application: GC cannot account for their references.
+This is retention cleanup, not a disk quota; live state and blocks used within the grace
+period can still grow, so operators should monitor disk space.
 
 ### Public seeder defaults
 
@@ -328,7 +354,7 @@ Raise both if you seed many more communities than the defaults and the seeder ge
 
 The default community sources are dozens of small directory communities plus a short supplemental seeder list, not full media archiving.
 Disk and bandwidth mostly scale with `MAX_COMMUNITIES`, pinned page/update size, pubsub activity, and Kubo/libp2p overhead.
-On small VPSes, set `MAX_COMMUNITIES` (unset = no cap) and keep `PIN_CONCURRENCY=1` (the Docker default).
+On small VPSes, lower `MAX_COMMUNITIES` if needed (default 10) and keep `PIN_CONCURRENCY=1` (the Docker default).
 
 Bitsocial configures delegated HTTP routing/tracker endpoints for provider lookups, so it should be lighter than an untuned Kubo node doing full DHT provider sweeps.
 It still runs Kubo and joins pubsub topics, so treat it as Kubo-class infrastructure rather than a static HTTP service.

@@ -1,3 +1,21 @@
+import 'dotenv/config'
+
+export const parseMaxCommunities = (value?: string) => {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return 10
+  if (normalized === 'unlimited') return undefined
+  const cap = Number(normalized)
+  if (!/^\d+$/.test(normalized) || !Number.isSafeInteger(cap)) {
+    throw new Error('MAX_COMMUNITIES must be a non-negative integer or "unlimited"')
+  }
+  return cap
+}
+
+const blockstoreGcGraceMs = Number(process.env.VOTES_BLOCKSTORE_GC_GRACE_MS || 24 * 60 * 60 * 1000)
+if (!Number.isSafeInteger(blockstoreGcGraceMs) || blockstoreGcGraceMs < 0) {
+  throw new Error('VOTES_BLOCKSTORE_GC_GRACE_MS must be a non-negative integer (0 disables GC)')
+}
+
 export const defaultCommunityListSources = [
   'https://api.github.com/repos/bitsocialnet/lists/contents/5chan-directories?ref=master',
   'https://api.github.com/repos/bitsocialnet/lists/contents/seedit-directories?ref=master'
@@ -34,7 +52,7 @@ export default {
     // top of the public list sources. Extras are not capped by MAX_COMMUNITIES.
     communityExtraListSources: parseSourceList(process.env.COMMUNITY_EXTRA_LIST_SOURCES || ''),
     discoverIntervalMs: Number(process.env.DISCOVER_INTERVAL_MS || 10 * 60 * 1000),
-    maxCommunities: process.env.MAX_COMMUNITIES ? Number(process.env.MAX_COMMUNITIES) : undefined,
+    maxCommunities: parseMaxCommunities(process.env.MAX_COMMUNITIES),
     pinConcurrency: Number(process.env.PIN_CONCURRENCY || 2),
     pubsubRoutingProvideIntervalMs: Number(process.env.PUBSUB_ROUTING_PROVIDE_INTERVAL_MS || 6 * 60 * 60 * 1000),
   },
@@ -74,6 +92,8 @@ export default {
     // The embedded Helia node's on-disk blockstore (verified bundle blocks + checkpoint
     // chunks, served over the votes network's bitswap).
     blockstorePath: process.env.VOTES_BLOCKSTORE_PATH || 'votes-blockstore',
+    // Zero disables GC. Blocks must stay unused/unreferenced for this grace period.
+    blockstoreGcGraceMs,
     // The embedded libp2p node's datastore (AutoTLS certificate + keychain persist here,
     // so restarts don't re-run ACME).
     datastorePath: process.env.VOTES_DATASTORE_PATH || 'votes-datastore',

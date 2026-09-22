@@ -147,8 +147,9 @@ const startCommunitySeeding = async () => {
   // discover (e.g. network blip, GitHub rate limit) recovers on the next 10s
   // tick instead of hanging the boot. Mirrors the recovery behavior the old
   // setInterval-based discovery had before the honker migration.
+  // Wait for this run's discovery even with cached state: an older unlimited
+  // selection must not subscribe before the new cap and extra lists are applied.
   while (
-    !(seederState as {communitiesSeeding?: any[]; discoveryCompleted?: boolean}).communitiesSeeding &&
     !(seederState as {discoveryCompleted?: boolean}).discoveryCompleted
   ) {
     if (signal.aborted) {

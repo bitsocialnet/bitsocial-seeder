@@ -5,6 +5,10 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import {CID} from 'multiformats/cid'
+import {sha256} from 'multiformats/hashes/sha2'
+import {FsBlockstore} from 'blockstore-fs'
+import {PubsubVoter} from '@bitsocial/pubsub-voting'
 
 const getFreePort = () => new Promise<number>((resolve, reject) => {
   const server = net.createServer()
@@ -61,10 +65,18 @@ process.env.VOTES_CHAIN_RPC_URLS = JSON.stringify({base: [`http://127.0.0.1:${cl
 process.env.VOTES_ETH_RPC_URLS = `http://127.0.0.1:${closedEthPort}`
 process.env.VOTES_PEER_KEY_PATH = path.join(tmpDir, 'votes-peer.key')
 process.env.VOTES_BLOCKSTORE_PATH = path.join(tmpDir, 'votes-blockstore')
+process.env.VOTES_BLOCKSTORE_GC_GRACE_MS = '1'
 process.env.VOTES_DATASTORE_PATH = path.join(tmpDir, 'votes-datastore')
 process.env.VOTES_DATA_PATH = path.join(tmpDir, 'votes-cache')
 process.env.KUBO_RPC_URL = `http://127.0.0.1:${closedKuboPort}/api/v0`
 
+// Seed an old unused block before the seeder opens its dedicated store.
+const unusedBytes = new TextEncoder().encode('obsolete checkpoint')
+const unusedCid = CID.createV1(0x71, await sha256.digest(unusedBytes))
+const stored = new FsBlockstore(process.env.VOTES_BLOCKSTORE_PATH)
+await stored.open()
+await stored.put(unusedCid, unusedBytes)
+await stored.close()
 const {votesTick, destroyVotesSeeder} = await import('../lib/votes/seeder.ts')
 
 const logs: string[] = []
@@ -99,6 +111,9 @@ test('votesTick reconciles contests against the manifests', {timeout: 300_000}, 
   await votesTick()
   assert.ok(logs.some(line => line.includes('votes node started, peer ')), logs.join('\n'))
   assert.ok(logs.some(line => line.includes('seeding 2 votes contests')), logs.join('\n'))
+  const hasRetentionApi = typeof (PubsubVoter.prototype as {retainsBlock?: unknown}).retainsBlock === 'function'
+  if (!hasRetentionApi) assert.ok(logs.some(line => line.includes('GC unavailable')), logs.join('\n'))
+
 
   // A contest dropped from the manifest is left on the next tick.
   logs.length = 0
@@ -106,6 +121,18 @@ test('votesTick reconciles contests against the manifests', {timeout: 300_000}, 
   await votesTick()
   assert.ok(logs.some(line => line.includes('votes /q/ left (dropped from manifest)')), logs.join('\n'))
   assert.ok(logs.some(line => line.includes('seeding 1 votes contests')), logs.join('\n'))
+
+  // Continue sweeping once the last contest has left, so its blocks can age out.
+  fs.rmSync(manifestPath)
+  fs.mkdirSync(manifestPath) // an empty manifest directory successfully derives zero contests
+  await votesTick()
+  logs.length = 0
+  await votesTick()
+  assert.ok(logs.some(line => line.includes('seeding 0 votes contests')), logs.join('\n'))
+  assert.equal(await stored.has(unusedCid), !hasRetentionApi,
+    'GC must remove unused blocks with the library API and preserve them on older installs')
+
+
 })
 
 test('destroyVotesSeeder stops the voter and the embedded node', {timeout: 60_000}, async () => {

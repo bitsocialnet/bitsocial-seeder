@@ -13,7 +13,8 @@
   "author": "Bitsocial Forge",
   "license": "GPL-3.0-or-later",
   "engines": {
-    "node": ">=24"
+    "node": ">=24",
+    "npm": ">=11 <12"
   },
   "main": "dist/start.js",
   "bin": {
@@ -21,6 +22,7 @@
   },
   "files": [
     "dist",
+    "npm-shrinkwrap.json",
     "README.md",
     "LICENSE"
   ],
@@ -39,7 +41,7 @@
   },
   "dependencies": {
     "@bitsocial/bitsocial-cli": "0.19.94",
-    "@bitsocial/pubsub-voting": "0.7.4",
+    "@bitsocial/pubsub-voting": "0.7.7",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
     "@helia/bitswap": "4.0.14",
@@ -104,6 +106,9 @@
     "undici@7": "7.29.0",
     "undici@8": "8.9.0",
     "uuid@13": "13.0.1",
-    "ws@8": "8.21.0"
+    "ws@8": "8.21.0",
+    "@libp2p/gossipsub@16": "16.0.5",
+    "decompress": "npm:@xhmikosr/decompress@11.1.4",
+    "image-size": "2.0.4"
   }
 }

@@ -54,7 +54,7 @@ test('the bin shim runs start.ts, which exits cleanly when both communities and 
 // (so ensureDaemon attaches instead of spawning bitsocial-cli), a local list
 // source, wait for the seeding loop to come up, then SIGINT and expect a
 // clean exit 0. cwd is the temp dir so dotenv cannot pick up a repo .env.
-test('start.ts boots, seeds from a local list source, and shuts down cleanly on SIGINT', {timeout: 90_000}, async () => {
+test('start.ts applies the default cap before subscribing, including on a legacy-state restart', {timeout: 90_000}, async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-boot-'))
   const pkcFake = createFakePkcRpcServer()
   const kuboFake = createFakeKuboRpcServer()
@@ -62,7 +62,9 @@ test('start.ts boots, seeds from a local list source, and shuts down cleanly on 
   await Promise.all([pkcFake.listen(pkcPort), kuboFake.listen(kuboPort)])
 
   const listPath = path.join(tmpDir, 'communities.json')
-  fs.writeFileSync(listPath, JSON.stringify({communities: [{address: 'boot-smoke.bso'}]}))
+  const communities = Array.from({length: 25}, (_, i) => ({address: `boot-${i}.bso`}))
+  fs.writeFileSync(listPath, JSON.stringify({communities}))
+  fs.writeFileSync(path.join(tmpDir, 'seederState.json'), JSON.stringify({communitiesSeeding: communities}))
 
   const child = spawn(process.execPath, [path.resolve(import.meta.dirname, '..', 'start.ts')], {
     cwd: tmpDir,
@@ -72,6 +74,7 @@ test('start.ts boots, seeds from a local list source, and shuts down cleanly on 
       KUBO_RPC_URL: `http://127.0.0.1:${kuboPort}/api/v0`,
       COMMUNITY_LIST_SOURCES: listPath,
       COMMUNITY_EXTRA_LIST_SOURCES: '',
+      MAX_COMMUNITIES: '',
       // 'none', not '', so the smoke test does not start a real votes libp2p node now that
       // votes seeding is on by default.
       VOTES_MANIFEST_SOURCES: 'none',
@@ -109,9 +112,9 @@ test('start.ts boots, seeds from a local list source, and shuts down cleanly on 
         60_000
       ).unref())
     ])
-    assert.equal(communityCount, '1', `expected the local list's single community\noutput:\n${output}`)
+    assert.equal(communityCount, '10', `expected the default cap to apply before subscribing\noutput:\n${output}`)
     assert.match(output, /using existing bitsocial daemon RPCs/)
-    assert.match(output, /discovered 1 communities to seed/)
+    assert.match(output, /discovered 10 communities to seed/)
 
     child.kill('SIGINT')
     const {code, signal} = await exited

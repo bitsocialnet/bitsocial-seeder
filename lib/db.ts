@@ -7,6 +7,11 @@ const {open} = honker
 // streams, notifications, locks, rate limits, results) are managed by honker
 // itself and created lazily on first use of db.queue() / db.scheduler() / etc.
 const SCHEMA = `
+  CREATE TABLE IF NOT EXISTS seeder_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS communities (
     community_key TEXT PRIMARY KEY,
     address TEXT,

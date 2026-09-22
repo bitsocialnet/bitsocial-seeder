@@ -25,6 +25,6 @@
   },
   "hooks": {
     "after:bump": "npm i --package-lock-only && npm run changelog",
-    "before:git:release": "git add CHANGELOG.md package.json package-lock.json && git commit -m \"chore(release): ${version} [skip ci]\""
+    "before:git:release": "git add CHANGELOG.md package.json npm-shrinkwrap.json && git commit -m \"chore(release): ${version} [skip ci]\""
   }
 }

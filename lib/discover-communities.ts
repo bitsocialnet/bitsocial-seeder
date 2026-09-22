@@ -1,4 +1,6 @@
 import config from '../config.ts'
+import {createHash, randomUUID} from 'node:crypto'
+import {db} from './db.ts'
 import {extractCommunityEntries, fetchCommunityListSource, getCommunityKey} from './utils.ts'
 import seederStateModule from './seeder-state.ts'
 import 'dotenv/config'
@@ -8,7 +10,11 @@ const seederState = seederStateModule as {communitiesSeeding?: any[]; discoveryC
 const communityLists: any[] = []
 const extraCommunityLists: any[] = []
 
-const isFiniteNumber = (value: any) => typeof value === 'number' && Number.isFinite(value)
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+// Persist independently of list order and the optional votes node identity.
+db.query('INSERT OR IGNORE INTO seeder_metadata (key, value) VALUES (?, ?)', ['community-selection-seed', randomUUID()])
+const selectionSeed = db.query('SELECT value FROM seeder_metadata WHERE key = ?', ['community-selection-seed'])[0].value as string
 
 const fetchConfiguredCommunityLists = async (sources: string[], cache: any[], label: string) => {
   if (sources.length === 0) {
@@ -42,8 +48,13 @@ const mergeCommunityLists = (lists: any[]) => {
   return [...communitiesMap.values()]
 }
 
-export const mergeDiscoveredCommunities = ({communityLists, extraCommunityLists, maxCommunities}: {communityLists: any[], extraCommunityLists: any[], maxCommunities?: any}) => {
+export const mergeDiscoveredCommunities = ({communityLists, extraCommunityLists, maxCommunities, seed = selectionSeed}: {communityLists: any[], extraCommunityLists: any[], maxCommunities?: number, seed?: string}) => {
   const publicCommunities = mergeCommunityLists(communityLists)
+  if (isFiniteNumber(maxCommunities) && publicCommunities.length > maxCommunities) {
+    const rank = (community: any) => createHash('sha256').update(JSON.stringify([seed, getCommunityKey(community)])).digest('hex')
+    const ranks = new Map(publicCommunities.map(community => [getCommunityKey(community), rank(community)]))
+    publicCommunities.sort((a, b) => ranks.get(getCommunityKey(a))!.localeCompare(ranks.get(getCommunityKey(b))!))
+  }
   const limitedPublicCommunities = isFiniteNumber(maxCommunities)
     ? publicCommunities.slice(0, Math.max(0, maxCommunities))
     : publicCommunities

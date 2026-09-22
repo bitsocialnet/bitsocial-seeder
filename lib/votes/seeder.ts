@@ -3,6 +3,7 @@ import {create as createKubo} from 'kubo-rpc-client'
 import {createBsoResolvers} from '@bitsocial/bitsocial-cli/dist/common-utils/resolvers.js'
 import {PubsubVoter, criteriaCid, TOPIC_PREFIX} from '@bitsocial/pubsub-voting'
 import type {Contest, Criteria} from '@bitsocial/pubsub-voting'
+import type {CID} from 'multiformats/cid'
 import config from '../../config.ts'
 import {confirmKuboPublicAddrs, createVotesNode} from './node.ts'
 import {chainClientFactory, checkChainClients} from './chains.ts'
@@ -28,6 +29,7 @@ const contestsSeeding = new Map<string, ContestEntry>() // criteriaCid string â†
 const manifestCache: Criteria[][] = []
 let helia: any
 let voter: PubsubVoter | undefined
+let warnedGcUnavailable = false
 
 const updateLimit = pLimit(Math.max(1, Number(config.votes.updateConcurrency) || 8))
 
@@ -242,7 +244,9 @@ const joinContest = async (cidString: string, criteria: Criteria) => {
 // announcer debounce-fires on every join and checkpoint change.
 export const votesTick = async () => {
   const allCriteria = await loadVotesCriteria(config.votes.manifestSources, manifestCache)
-  if (allCriteria.length === 0 && contestsSeeding.size === 0) {
+  // Once started, keep collecting even after the last contest leaves; otherwise
+  // those blocks would never reach a second sweep after their grace period.
+  if (allCriteria.length === 0 && contestsSeeding.size === 0 && !voter) {
     console.log('no votes contests derived yet')
     return
   }
@@ -261,8 +265,8 @@ export const votesTick = async () => {
     if (desired.has(cidString)) {
       continue
     }
+    await entry.contest.stop()
     contestsSeeding.delete(cidString)
-    entry.contest.stop().catch(logErrorMessage(`/${entry.criteria.contestId}/`))
     console.log(`votes /${entry.criteria.contestId}/ left (dropped from manifest)`)
   }
 
@@ -286,6 +290,25 @@ export const votesTick = async () => {
   }
   await Promise.all(joins)
   console.log(`seeding ${contestsSeeding.size} votes contests`)
+
+  const graceMs = config.votes.blockstoreGcGraceMs
+  if (graceMs > 0) {
+    // Keep older library installs safe during the companion API rollout. Never guess
+    // checkpoint ownership or interpret a missing API as an empty retained set.
+    const gcVoter = voter as PubsubVoter & {retainsBlock?: (cid: CID) => boolean}
+    if (!gcVoter.retainsBlock) {
+      if (!warnedGcUnavailable) {
+        console.log('votes blockstore GC unavailable: upgrade @bitsocial/pubsub-voting to a release with retainsBlock(); no blocks will be deleted')
+        warnedGcUnavailable = true
+      }
+    }
+    else {
+      await helia.votesBlockstore.collect((cid: CID) => gcVoter.retainsBlock!(cid), graceMs)
+        .then(({scanned, removed}: {scanned: number, removed: number}) => {
+          console.log(`votes blockstore GC: scanned ${scanned}, removed ${removed} unreferenced blocks`)
+        }).catch(logErrorMessage('blockstore GC'))
+    }
+  }
 
   // Probe every chain the joined contests verify against; a dead RPC means every incoming
   // vote is silently rejected, so it must be loud in the log (reported on status change).
