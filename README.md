@@ -14,6 +14,12 @@ No — and for most users it is not the recommended way. Bitsocial desktop apps 
 
 This is also an **experimental repository**. Releases are cut frequently, internals change without warning between minor versions, and the project is treated as a place to try ideas that benefit the protocol but are not on its critical path. Please file issues if you hit anything; expect bumps.
 
+## Posting to communities hosted behind NAT
+
+Browsers cannot dial a community owner behind NAT (see [pkc-js#369](https://github.com/pkcprotocol/pkc-js/issues/369)). A publicly reachable seeder fixes both directions, not just reads: besides pinning the community's pages, the seeder's Kubo joins every seeded community's pubsub topic, so once the NAT-hosted owner node is connected to the seeder, gossipsub forwards the whole challenge exchange (challenge request, challenge, answer, verification) browser → seeder → owner and back. Nobody can dial the owner, but it finds the seeder on its own: Kubo's pubsub peer discovery looks up each joined topic's `floodsub:<topic>` routing CID through its content routers, the seeder provides exactly those CIDs to the same HTTP routers, and the owner dials out to the address it gets back. Browsers find the seeder the same way. No relay role or extra configuration is needed on either side.
+
+This is covered by `test/nat-owner-publish-e2e.test.ts`, which hosts a community on a loopback-only Kubo forced to private reachability with no bootstrap peers, seeds it from a second daemon, and gives both only an HTTP router that learns providers from what the nodes themselves announce. It checks that the owner finds and dials the seeder through the router (about a minute after the seeder starts seeding), publishes a post from a pkc-js libp2p-js client that can only reach the seeder, and confirms the same publish fails once the seeder is stopped.
+
 ## Setup
 
 The fastest path is Docker Compose. Recommended for unattended VPS seeders — it gives you a predictable service wrapper, simpler updates, and fewer local Node/native dependency surprises.
