@@ -12,6 +12,8 @@ No — and for most users it is not the recommended way. Bitsocial desktop apps 
 
 `bitsocial-seeder` exists for operators who want to contribute consistent 24/7 seeding capacity from a VPS or a spare machine — for example, running closer to popular communities to lower fetch latency, or keeping data available during quiet periods when few app users are online. It is helpful but not required.
 
+A publicly reachable seeder also serves a role the apps usually cannot: it makes communities hosted behind NAT loadable from browsers. Most desktop nodes sit behind home routers, carrier-grade NAT, or mobile hotspots without port forwarding, so their Kubo announces only relayed (`/p2p-circuit`) addresses. A browser node cannot hole-punch to such a node (Kubo has no WebRTC private-to-private transport), and a relayed connection is too limited to serve pages, so a community whose only provider is its owner's NATed node never loads on web clients such as 5chan.app (see [pkc-js#369](https://github.com/pkcprotocol/pkc-js/issues/369)). A seeder on a public IP pins the community's pages and post updates and joins its pubsub topic, giving browsers a dialable peer to fetch from.
+
 This is also an **experimental repository**. Releases are cut frequently, internals change without warning between minor versions, and the project is treated as a place to try ideas that benefit the protocol but are not on its critical path. Please file issues if you hit anything; expect bumps.
 
 ## Posting to communities hosted behind NAT
