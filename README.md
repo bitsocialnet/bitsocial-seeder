@@ -14,6 +14,12 @@ No — and for most users it is not the recommended way. Bitsocial desktop apps 
 
 This is also an **experimental repository**. Releases are cut frequently, internals change without warning between minor versions, and the project is treated as a place to try ideas that benefit the protocol but are not on its critical path. Please file issues if you hit anything; expect bumps.
 
+## Posting to communities hosted behind NAT
+
+A community hosted by a desktop app or a Kubo node behind NAT cannot be dialed by browsers, so a browser cannot load it on its own. A publicly reachable seeder fixes both directions, not just reads: besides pinning the community's pages, the seeder's Kubo joins every seeded community's pubsub topic, so once the NAT-hosted owner node is connected to the seeder (it can dial out even though nobody can dial it), gossipsub forwards the whole challenge exchange (challenge request, challenge, answer, verification) browser → seeder → owner and back. Browsers find the seeder through the HTTP routers it provides the topic to. No relay role or extra configuration is needed on either side.
+
+This is covered by `test/nat-owner-publish-e2e.test.ts`, which hosts a community on a loopback-only Kubo forced to private reachability, seeds it through the bundled daemon, publishes a post from a pkc-js libp2p-js client that can only reach the seeder, and confirms the same publish fails once the seeder is stopped. The test hands the owner the seeder as a bootstrap peer; whether a NATed owner discovers a seeder on its own on the public network is not something it exercises.
+
 ## Setup
 
 The fastest path is Docker Compose. Recommended for unattended VPS seeders — it gives you a predictable service wrapper, simpler updates, and fewer local Node/native dependency surprises.
