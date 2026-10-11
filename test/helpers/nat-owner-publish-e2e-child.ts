@@ -389,18 +389,26 @@ try {
     })
     const timings: {[event: string]: number} = {}
     const publishStart = Date.now()
+    // Bounded so a lost message reports which step was missing instead of the runner's
+    // generic kill.
+    const publishTimeoutMs = 120_000
     const verification: any = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error(`${label} publish timed out after ${publishTimeoutMs}ms, timings=${JSON.stringify(timings)}`)), publishTimeoutMs)
+      const settle = (settleWith: () => void) => {
+        clearTimeout(timer)
+        settleWith()
+      }
       post.once('challenge', (challenge: any) => {
         timings.challenge = Date.now() - publishStart
         assert.equal(challenge.challenges?.[0]?.challenge, challengeQuestion)
-        post.publishChallengeAnswers({challengeAnswers: [challengeAnswer]}).catch(reject)
+        post.publishChallengeAnswers({challengeAnswers: [challengeAnswer]}).catch((error: unknown) => settle(() => reject(error)))
       })
       post.once('challengeverification', (challengeVerification: any) => {
         timings.challengeverification = Date.now() - publishStart
-        resolve(challengeVerification)
+        settle(() => resolve(challengeVerification))
       })
-      post.once('error', reject)
-      post.publish().catch(reject)
+      post.once('error', (error: unknown) => settle(() => reject(error)))
+      post.publish().catch((error: unknown) => settle(() => reject(error)))
     })
     return {post, verification, timings}
   }
