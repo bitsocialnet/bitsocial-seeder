@@ -1,18 +1,24 @@
 // Child process for test/nat-owner-publish-e2e.test.ts (bitsocialnet/bitsocial-seeder#25).
 //
-// Three nodes, all hermetic (no bootstrap peers, no public routers, no AutoConf):
+// Three nodes and one HTTP router, all hermetic (no bootstrap peers, no public routers, no
+// AutoConf):
 //
+//   router   an in-memory Routing V1 server standing in for the pkc http routers: it stores
+//            the provider records the kubos PUT to it (dropping address-less ones, like the
+//            real router) and answers lookups with them — it is never told about any peer.
 //   owner    bitsocial-cli daemon (kubo + PKC RPC) hosting the community. Its kubo is forced
-//            to private reachability, announces no addresses, runs the relay client and only
-//            knows the seeder as a bootstrap peer — the NATed desktop setup from
-//            pkcprotocol/pkc-js#369.
-//   seeder   the bundled daemon this repo seeds through, with public reachability and the
-//            relay service on, plus the real seeding code (subscribeCommunitiesUpdates +
-//            joinPubsubTopics) so its kubo joins the community's pubsub topic.
-//   browser  a pkc-js libp2p-js client (what 5chan.app runs) whose only peer source is an
-//            HTTP router that answers every lookup with the seeder's websocket address.
+//            to private reachability, announces no addresses, runs the relay client and has
+//            no bootstrap peers — the NATed desktop setup from pkcprotocol/pkc-js#369. Its
+//            only way to the seeder is kubo's own pubsub peer discovery, which looks up the
+//            `floodsub:<topic>` routing CID through the router.
+//   seeder   a bitsocial-cli daemon with public reachability and the relay service on, plus
+//            the real seeding code (subscribeCommunitiesUpdates + joinPubsubTopics + the
+//            routing-provide worker) so its kubo joins and provides the community's topics.
+//   browser  a pkc-js libp2p-js client (what 5chan.app runs) whose only peer source is the
+//            router.
 //
-// The browser loads the community, publishes a post through a `question` challenge (all
+// The owner must find and dial the seeder on its own. Then the browser loads the community,
+// publishes a post through a `question` challenge (all
 // four pubsub messages: challengerequest → challenge → challengeanswer →
 // challengeverification), and the post must land in the owner's community. Then the seeder
 // is stopped and a fresh browser must fail to publish, proving the seeder carried the
@@ -63,7 +69,7 @@ const kuboBinary: string = require('kubo').path()
 // Kubo repos are pre-initialized so bitsocial-cli preserves our config (it only applies its
 // defaults to a repo it created itself). Every "auto" placeholder kubo 0.37+ expands via
 // AutoConf is replaced, so neither node ever touches the public network.
-const initKuboRepo = (ipfsPath: string, {apiPort, gatewayPort, patch}: {apiPort: number, gatewayPort: number, patch: (config: any) => void}) => {
+const initKuboRepo = (ipfsPath: string, {apiPort, gatewayPort, routerUrl, patch}: {apiPort: number, gatewayPort: number, routerUrl: string, patch: (config: any) => void}) => {
   fs.mkdirSync(ipfsPath, {recursive: true})
   const initResult = spawnSync(kuboBinary, ['init', '--profile', 'server'], {
     env: {...process.env, IPFS_PATH: ipfsPath},
@@ -79,7 +85,27 @@ const initKuboRepo = (ipfsPath: string, {apiPort, gatewayPort, patch}: {apiPort:
   // nothing but loopback.
   config.Swarm.AddrFilters = []
   config.AutoConf = {Enabled: false}
-  config.Routing = {...config.Routing, DelegatedRouters: []}
+  // Exactly the Routing config pkc-js writes for its http routers
+  // (runtime/node/setup-kubo-http-routers): find-providers and provide go to the router only.
+  // Pre-writing it keeps the daemon's pkc-js from rewriting it and restarting kubo.
+  config.Routing = {
+    ...config.Routing,
+    DelegatedRouters: [],
+    Type: 'custom',
+    Methods: {
+      'find-providers': {RouterName: 'HttpRoutersParallel'},
+      provide: {RouterName: 'HttpRoutersParallel'},
+      'find-peers': {RouterName: 'HttpRouterNotSupported'},
+      'get-ipns': {RouterName: 'HttpRouterNotSupported'},
+      'put-ipns': {RouterName: 'HttpRouterNotSupported'}
+    },
+    Routers: {
+      HttpRoutersParallel: {Type: 'parallel', Parameters: {Routers: [{RouterName: 'HttpRouter1', IgnoreErrors: true, Timeout: '10s'}]}},
+      HttpRouterNotSupported: {Type: 'http', Parameters: {Endpoint: 'http://kubohttprouternotsupported'}},
+      HttpRouter1: {Type: 'http', Parameters: {Endpoint: routerUrl}}
+    }
+  }
+  config.Provide = {...config.Provide, DHT: {...config.Provide?.DHT, SweepEnabled: false}}
   config.Ipns = {...config.Ipns, UsePubsub: true, DelegatedPublishers: []}
   config.DNS = {Resolvers: {}}
   config.AutoTLS = {Enabled: false}
@@ -95,161 +121,177 @@ const [
   routerPort
 ] = await Promise.all(Array.from({length: 7}, getFreePort))
 
-// --- seeder daemon -------------------------------------------------------------------------
-const seederDataPath = path.join(tmpDir, 'seeder-daemon-data')
+// The seeder code (config.ts) reads these at import time.
 process.env.PKC_RPC_URL = `ws://127.0.0.1:${seederPkcPort}`
 process.env.KUBO_RPC_URL = `http://127.0.0.1:${seederKuboPort}/api/v0`
 process.env.IPFS_GATEWAY_URL = `http://127.0.0.1:${seederGatewayPort}`
-process.env.SEEDER_DAEMON_DATA_PATH = seederDataPath
 process.env.SEEDER_DB_PATH = path.join(tmpDir, 'seeder.db')
 process.env.SEEDER_STATE_PATH = path.join(tmpDir, 'seederState.json')
-process.env.SEEDER_DAEMON_READY_TIMEOUT_MS = process.env.SEEDER_DAEMON_READY_TIMEOUT_MS || '120000'
 
-initKuboRepo(path.join(seederDataPath, '.bitsocial-cli.ipfs'), {
-  apiPort: seederKuboPort,
-  gatewayPort: seederGatewayPort,
-  patch: config => {
-    // Random loopback ports: tcp for the owner's kubo, websocket for the browser (a real
-    // browser can only dial WSS). NoAnnounce is emptied so `ipfs id` reports the loopback
-    // addrs — in production the seeder announces its public ones.
-    config.Addresses.Swarm = ['/ip4/127.0.0.1/tcp/0', '/ip4/127.0.0.1/tcp/0/ws']
-    config.Addresses.NoAnnounce = []
-    config.Internal = {...config.Internal, Libp2pForceReachability: 'public'}
-    config.Swarm.RelayService = {Enabled: true}
-  }
-})
-step(`seeder kubo repo pre-initialized, pkc=${seederPkcPort} kubo=${seederKuboPort} gateway=${seederGatewayPort}`)
-
-const {ensureDaemon, stopDaemon, buildDaemonArgs, isPkcRpcReady, isKuboRpcReachable} = await import('../../lib/daemon.ts')
-
-let ownerDaemon: ChildProcess | undefined
-let ownerDaemonExit: {code: number | null, signal: NodeJS.Signals | null} | undefined
-let router: http.Server | undefined
-const pkcInstances: any[] = []
-const ownerKuboRpcUrl = `http://127.0.0.1:${ownerKuboPort}/api/v0`
-
-const stopOwnerDaemon = async () => {
-  if (!ownerDaemon || ownerDaemonExit) {
+// --- HTTP router -----------------------------------------------------------------------------
+// Routing V1 PUT bodies are `{Providers: [{Schema, Payload: {ID, Addrs, Keys, ...}}]}`. The
+// real router verifies signatures and drops records with no addrs; this one trusts the
+// loopback kubos but drops address-less records the same way, so the owner (which announces
+// nothing) is never handed out and nobody can learn a way to dial it.
+const routerUrl = `http://127.0.0.1:${routerPort}`
+const routerProviders = new Map<string, Map<string, string[]>>()
+const routerProvidesByPeer = new Map<string, number>()
+let routerLookups = 0
+const router = http.createServer((request, response) => {
+  response.setHeader('Content-Type', 'application/json')
+  response.setHeader('Cache-Control', 'no-store')
+  const lookupPrefix = '/routing/v1/providers/'
+  if (request.method === 'GET' && request.url?.startsWith(lookupPrefix)) {
+    routerLookups++
+    const cid = request.url.slice(lookupPrefix.length).split('?')[0]
+    const Providers = [...(routerProviders.get(cid) || new Map())].map(([ID, Addrs]) => ({Schema: 'peer', ID, Addrs, Protocols: ['transport-bitswap']}))
+    response.end(JSON.stringify({Providers}))
     return
   }
-  const exited = new Promise<void>(resolve => ownerDaemon!.once('exit', () => resolve()))
-  ownerDaemon.kill('SIGINT')
+  const chunks: Buffer[] = []
+  request.on('data', chunk => chunks.push(chunk))
+  request.once('end', () => {
+    if (request.method === 'PUT' && request.url?.startsWith('/routing/v1/providers')) {
+      try {
+        const {Providers = []} = JSON.parse(Buffer.concat(chunks).toString() || '{}')
+        for (const {Payload} of Providers) {
+          if (typeof Payload?.ID !== 'string' || !Payload.Addrs?.length) {
+            continue
+          }
+          for (const key of Payload.Keys || []) {
+            if (!routerProviders.has(key)) {
+              routerProviders.set(key, new Map())
+            }
+            routerProviders.get(key)!.set(Payload.ID, Payload.Addrs)
+          }
+          routerProvidesByPeer.set(Payload.ID, (routerProvidesByPeer.get(Payload.ID) || 0) + 1)
+        }
+      }
+      catch {}
+    }
+    response.end(JSON.stringify({ProvideResults: []}))
+  })
+})
+await new Promise<void>((resolve, reject) => {
+  router.once('error', reject)
+  router.listen(routerPort, '127.0.0.1', () => resolve())
+})
+step(`http router listening on ${routerUrl}`)
+
+const {buildDaemonArgs, isPkcRpcReady, isKuboRpcReachable} = await import('../../lib/daemon.ts')
+
+// Both daemons are spawned here rather than through ensureDaemon so they can be pointed at
+// the router (--pkcOptions.httpRoutersOptions); the seeder code then reuses its daemon over
+// PKC_RPC_URL/KUBO_RPC_URL like any already-running local daemon.
+type Daemon = {name: string, kuboRpcUrl: string, process: ChildProcess, exit?: {code: number | null, signal: NodeJS.Signals | null}}
+const daemons: Daemon[] = []
+
+const startDaemon = async ({name, pkcPort, kuboPort, gatewayPort, patch}: {name: string, pkcPort: number, kuboPort: number, gatewayPort: number, patch: (config: any) => void}) => {
+  const dataPath = path.join(tmpDir, `${name}-daemon-data`)
+  initKuboRepo(path.join(dataPath, '.bitsocial-cli.ipfs'), {apiPort: kuboPort, gatewayPort, routerUrl, patch})
+  const pkcRpcUrl = `ws://127.0.0.1:${pkcPort}`
+  const kuboRpcUrl = `http://127.0.0.1:${kuboPort}/api/v0`
+  const args = [
+    ...buildDaemonArgs({pkcRpcUrl, dataPath, logPath: path.join(tmpDir, `${name}-daemon.log`)}),
+    '--pkcOptions.httpRoutersOptions[0]', routerUrl
+  ]
+  const child = spawn(process.execPath, args, {
+    cwd: repoRoot,
+    env: {...process.env, KUBO_RPC_URL: kuboRpcUrl, IPFS_GATEWAY_URL: `http://127.0.0.1:${gatewayPort}`},
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  const daemon: Daemon = {name, kuboRpcUrl, process: child}
+  daemons.push(daemon)
+  const prefixOutput = (chunk: Buffer) => {
+    for (const line of chunk.toString().split('\n')) {
+      if (line) {
+        console.log(`[${name} daemon] ${line}`)
+      }
+    }
+  }
+  child.stdout!.on('data', prefixOutput)
+  child.stderr!.on('data', prefixOutput)
+  child.once('exit', (code, signal) => {
+    daemon.exit = {code, signal}
+  })
+  await waitFor(`the ${name} daemon RPCs`, Number(process.env.SEEDER_DAEMON_READY_TIMEOUT_MS || 120_000), async () => {
+    if (daemon.exit) {
+      throw Error(`${name} daemon exited before it was ready (code: ${daemon.exit.code}, signal: ${daemon.exit.signal})`)
+    }
+    const [pkcReady, kuboReady] = await Promise.all([isPkcRpcReady(pkcRpcUrl), isKuboRpcReachable(kuboRpcUrl)])
+    return pkcReady && kuboReady
+  })
+  return {daemon, pkcRpcUrl, kuboRpcUrl}
+}
+
+const stopDaemon = async (daemon: Daemon) => {
+  if (daemon.exit) {
+    return
+  }
+  const exited = new Promise<void>(resolve => daemon.process.once('exit', () => resolve()))
+  daemon.process.kill('SIGINT')
   const killTimer = setTimeout(() => {
     // bitsocial-cli spawns kubo detached; if the daemon has to be SIGKILLed, its kubo would
     // outlive the test — ask it to shut down over its RPC first.
-    fetch(`${ownerKuboRpcUrl}/shutdown`, {method: 'POST', signal: AbortSignal.timeout(2000)}).catch(() => {})
-    ownerDaemon!.kill('SIGKILL')
+    fetch(`${daemon.kuboRpcUrl}/shutdown`, {method: 'POST', signal: AbortSignal.timeout(2000)}).catch(() => {})
+    daemon.process.kill('SIGKILL')
   }, 20_000)
   await exited
   clearTimeout(killTimer)
 }
 
+const pkcInstances: any[] = []
+
 let exitCode = 0
 try {
-  const {started, status} = await ensureDaemon()
-  assert.equal(started, true, 'the test must spawn its own bundled seeder daemon')
-  assert.equal(status.ready, true)
+  // --- seeder daemon -----------------------------------------------------------------------
+  const seeder = await startDaemon({
+    name: 'seeder',
+    pkcPort: seederPkcPort,
+    kuboPort: seederKuboPort,
+    gatewayPort: seederGatewayPort,
+    patch: config => {
+      // Random loopback ports: tcp for the owner's kubo, websocket for the browser (a real
+      // browser can only dial WSS). NoAnnounce is emptied so the provider records carry the
+      // loopback addrs — in production the seeder announces its public ones.
+      config.Addresses.Swarm = ['/ip4/127.0.0.1/tcp/0', '/ip4/127.0.0.1/tcp/0/ws']
+      config.Addresses.NoAnnounce = []
+      config.Internal = {...config.Internal, Libp2pForceReachability: 'public'}
+      config.Swarm.RelayService = {Enabled: true}
+    }
+  })
   const {kubo: seederKubo, kuboPubsub: seederKuboPubsub, pkc: seederPkc} = await import('../../lib/bitsocial.ts')
   pkcInstances.push(seederPkc)
-  const seederId = await seederKubo.id()
-  const seederPeerId = seederId.id.toString()
-  const seederAddrs = seederId.addresses.map(addr => addr.toString())
-  const seederTcpAddr = seederAddrs.find(addr => addr.includes('/ip4/127.0.0.1/tcp/') && !addr.includes('/ws'))
-  const seederWsAddr = seederAddrs.find(addr => addr.includes('/ip4/127.0.0.1/tcp/') && addr.includes('/ws'))
-  assert.ok(seederTcpAddr, `seeder kubo should announce a loopback tcp addr, got ${seederAddrs.join(', ')}`)
-  assert.ok(seederWsAddr, `seeder kubo should announce a loopback ws addr, got ${seederAddrs.join(', ')}`)
-  step(`seeder daemon ready, kubo peer ${seederPeerId} at ${seederTcpAddr} and ${seederWsAddr}`)
-
-  // --- HTTP router -----------------------------------------------------------------------
-  // Stands in for the delegated Routing V1 routers pkc-js clients query (the seeder
-  // provides every seeded community's pubsub topic routing CID to them, see
-  // lib/seed-communities-core.ts): every provider lookup answers with the seeder's
-  // browser-dialable address and nothing else. Writes (announcements from the owner's
-  // daemon) are acknowledged and dropped.
-  const routerUrl = `http://127.0.0.1:${routerPort}`
-  const routerProviders = {
-    Providers: [{Schema: 'peer', ID: seederPeerId, Addrs: [seederWsAddr], Protocols: ['transport-bitswap']}]
-  }
-  let routerLookups = 0
-  router = http.createServer((request, response) => {
-    response.setHeader('Content-Type', 'application/json')
-    response.setHeader('Cache-Control', 'no-store')
-    if (request.method === 'GET' && request.url?.startsWith('/routing/v1/providers/')) {
-      routerLookups++
-      response.end(JSON.stringify(routerProviders))
-      return
-    }
-    request.resume()
-    request.once('end', () => response.end(JSON.stringify({ProvideResults: []})))
-  })
-  await new Promise<void>((resolve, reject) => {
-    router!.once('error', reject)
-    router!.listen(routerPort, '127.0.0.1', () => resolve())
-  })
-  step(`mock http router listening on ${routerUrl}`)
+  const seederPeerId = (await seederKubo.id()).id.toString()
+  step(`seeder daemon ready, kubo peer ${seederPeerId}`)
 
   // --- owner daemon ----------------------------------------------------------------------
-  const ownerDataPath = path.join(tmpDir, 'owner-daemon-data')
-  initKuboRepo(path.join(ownerDataPath, '.bitsocial-cli.ipfs'), {
-    apiPort: ownerKuboPort,
+  const owner = await startDaemon({
+    name: 'owner',
+    pkcPort: ownerPkcPort,
+    kuboPort: ownerKuboPort,
     gatewayPort: ownerGatewayPort,
     patch: config => {
       // Loopback-only listen, no announced addresses, forced private reachability, relay
-      // client on: nobody can dial this node, it can only dial out — to the seeder.
+      // client on, no bootstrap peers: nobody can dial this node and it knows nobody to dial.
       config.Addresses.Swarm = ['/ip4/127.0.0.1/tcp/0']
-      config.Bootstrap = [seederTcpAddr]
       config.Internal = {...config.Internal, Libp2pForceReachability: 'private'}
       config.Swarm.RelayClient = {Enabled: true}
     }
   })
-  const ownerPkcRpcUrl = `ws://127.0.0.1:${ownerPkcPort}`
-  const ownerArgs = [
-    ...buildDaemonArgs({pkcRpcUrl: ownerPkcRpcUrl, dataPath: ownerDataPath, logPath: path.join(tmpDir, 'owner-daemon.log')}),
-    '--pkcOptions.httpRoutersOptions[0]', routerUrl
-  ]
-  ownerDaemon = spawn(process.execPath, ownerArgs, {
-    cwd: repoRoot,
-    env: {...process.env, KUBO_RPC_URL: ownerKuboRpcUrl, IPFS_GATEWAY_URL: `http://127.0.0.1:${ownerGatewayPort}`},
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  const prefixOwnerOutput = (chunk: Buffer) => {
-    for (const line of chunk.toString().split('\n')) {
-      if (line) {
-        console.log(`[owner daemon] ${line}`)
-      }
-    }
-  }
-  ownerDaemon.stdout!.on('data', prefixOwnerOutput)
-  ownerDaemon.stderr!.on('data', prefixOwnerOutput)
-  ownerDaemon.once('exit', (code, signal) => {
-    ownerDaemonExit = {code, signal}
-  })
-  await waitFor('the owner daemon RPCs', Number(process.env.SEEDER_DAEMON_READY_TIMEOUT_MS), async () => {
-    if (ownerDaemonExit) {
-      throw Error(`owner daemon exited before it was ready (code: ${ownerDaemonExit.code}, signal: ${ownerDaemonExit.signal})`)
-    }
-    const [pkcReady, kuboReady] = await Promise.all([isPkcRpcReady(ownerPkcRpcUrl), isKuboRpcReachable(ownerKuboRpcUrl)])
-    return pkcReady && kuboReady
-  })
   const {create: createKubo} = await import('kubo-rpc-client')
-  const ownerKubo = createKubo({url: ownerKuboRpcUrl})
+  const ownerKubo = createKubo({url: owner.kuboRpcUrl})
   const ownerId = await ownerKubo.id()
   const ownerPeerId = ownerId.id.toString()
   // With nothing to announce kubo reports the bare `/p2p/<id>` entry.
   const ownerAnnouncedAddrs = ownerId.addresses.map(String).filter(addr => addr !== `/p2p/${ownerPeerId}`)
   assert.deepEqual(ownerAnnouncedAddrs, [], `the owner kubo must announce no addresses, got ${ownerAnnouncedAddrs.join(', ')}`)
-  step(`owner daemon ready, kubo peer ${ownerPeerId} announces no addresses`)
-
-  // The owner only ever connects *out*, to its bootstrap peer.
-  await waitFor('the owner kubo to connect to the seeder kubo', 60_000, async () => {
-    const peers = await seederKubo.swarm.peers()
-    return peers.some(peer => peer.peer.toString() === ownerPeerId)
-  })
-  step('owner kubo connected to seeder kubo')
+  assert.deepEqual(await ownerKubo.swarm.peers(), [], 'the owner kubo must start with no peers')
+  step(`owner daemon ready, kubo peer ${ownerPeerId} announces no addresses and has no peers`)
 
   // --- community on the owner ------------------------------------------------------------
   const {default: PKC} = await import('@pkcprotocol/pkc-js')
-  const ownerPkc = await PKC({pkcRpcClientsOptions: [ownerPkcRpcUrl]})
+  const ownerPkc = await PKC({pkcRpcClientsOptions: [owner.pkcRpcUrl]})
   pkcInstances.push(ownerPkc)
   ownerPkc.on('error', (error: any) => console.log(`owner pkc error: ${error?.message || error}`))
   const challengeQuestion = 'What is the seeder test password?'
@@ -268,19 +310,37 @@ try {
   step('owner kubo subscribed to the community pubsub topic')
 
   // --- seeder seeds the community --------------------------------------------------------
+  // Same loop the scheduler runs (start.ts): subscribe to community updates, join the topics
+  // of resolved communities, provide their routing CIDs. Nothing here tells either side about
+  // the other; the first update can only resolve once the owner has found the seeder.
   const {default: seederState} = await import('../../lib/seeder-state.ts')
   seederState.communitiesSeeding = [{address: communityAddress}]
-  const {subscribeCommunitiesUpdates, joinPubsubTopics} = await import('../../lib/seed-communities.ts')
+  const {subscribeCommunitiesUpdates, joinPubsubTopics, providePubsubTopicRoutingCids} = await import('../../lib/seed-communities.ts')
+  const {makeProcessPubsubRoutingProvide, pubsubRoutingQueue} = await import('../../lib/seed-communities-core.ts')
+  const processProvide = makeProcessPubsubRoutingProvide(seederKubo)
   await subscribeCommunitiesUpdates()
-  // joinPubsubTopics only knows a community once its first update resolved on the seeder's
-  // daemon (which resolves the owner's IPNS record through the owner↔seeder connection), so
-  // run it like the scheduler does, until the seeder's kubo is in the topic.
-  const pubsubTopic = await waitFor('the seeder kubo to join the community pubsub topic', 180_000, async () => {
+
+  const pubsubTopic = await waitFor('the seeder kubo to join the community pubsub topic', 300_000, async () => {
     await joinPubsubTopics()
+    await providePubsubTopicRoutingCids()
+    let job
+    while ((job = pubsubRoutingQueue.claimOne('nat-owner-e2e-worker'))) {
+      await processProvide(job)
+      job.ack()
+    }
     const topics = await seederKuboPubsub.pubsub.ls()
     return topics.find(topic => topic === communityAddress)
-  })
+  }, 2000)
   step(`seeder kubo joined pubsub topic ${pubsubTopic}`)
+
+  // The owner announces nothing and the router never hands it out, so the connection can
+  // only be one the owner dialed, to an address it got from the router.
+  const ownerToSeeder = (await ownerKubo.swarm.peers()).find(peer => peer.peer.toString() === seederPeerId)
+  assert.ok(ownerToSeeder, 'the owner kubo should have dialed the seeder kubo')
+  assert.ok(![...routerProviders.values()].some(providers => providers.has(ownerPeerId)), 'the router must never hand out the owner')
+  assert.ok(routerProvidesByPeer.get(seederPeerId), 'the seeder kubo should have provided to the router')
+  step(`owner kubo found and dialed the seeder kubo at ${ownerToSeeder.addr} through the router`)
+
   await waitFor('the seeder kubo to see the owner kubo as a topic peer', 60_000, async () => {
     const peers = await seederKuboPubsub.pubsub.peers(pubsubTopic)
     return peers.some(peer => peer.toString() === ownerPeerId)
@@ -357,7 +417,7 @@ try {
   const seederTopicPeers = (await seederKuboPubsub.pubsub.peers(pubsubTopic)).map(peer => peer.toString())
   assert.ok(seederTopicPeers.includes(ownerPeerId), `seeder topic peers should include the owner, got ${seederTopicPeers.join(', ')}`)
   assert.ok(seederTopicPeers.includes(browser.peerId), `seeder topic peers should include the browser, got ${seederTopicPeers.join(', ')}`)
-  assert.ok(routerLookups > 0, 'the browser should have discovered the seeder through the http router')
+  assert.ok(routerLookups > 0, 'the nodes should have discovered the seeder through the http router')
   step(`topology confirmed: browser peers=[${browserPeers.join(', ')}], seeder topic peers=[${seederTopicPeers.join(', ')}], router lookups=${routerLookups}`)
 
   // The post lands in the owner's community (its database, read back over the owner's RPC).
@@ -371,7 +431,7 @@ try {
   // --- negative control: without the seeder nothing carries the messages -------------------
   await browser.pkc.destroy()
   step('stopping the seeder daemon')
-  await stopDaemon()
+  await stopDaemon(seeder.daemon)
   await waitFor('the owner kubo to lose the seeder connection', 60_000, async () => {
     const peers = await ownerKubo.swarm.peers()
     return !peers.some(peer => peer.peer.toString() === seederPeerId)
@@ -425,8 +485,9 @@ for (const pkc of pkcInstances) {
   }
   catch {}
 }
-await stopOwnerDaemon()
-await stopDaemon()
-router?.close()
+for (const daemon of daemons) {
+  await stopDaemon(daemon)
+}
+router.close()
 step('done')
 process.exit(exitCode)

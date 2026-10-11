@@ -24,8 +24,9 @@ const getSkipReason = () => {
   }
 }
 
-// bitsocialnet/bitsocial-seeder#25: a browser (libp2p-js pkc-js client) that can only reach
-// the seeder must be able to publish to a community whose owner node is behind NAT, with
+// bitsocialnet/bitsocial-seeder#25: a community owner behind NAT, with no bootstrap peers,
+// must find the seeder through the http router on its own, and a browser (libp2p-js pkc-js
+// client) that can only reach the seeder must then be able to publish to the community, with
 // the seeder's kubo relaying the challenge exchange over gossipsub in both directions.
 test('a browser publishes to a NAT-hosted community through the seeder pubsub topic', {timeout: 600_000}, t => {
   const skipReason = getSkipReason()
