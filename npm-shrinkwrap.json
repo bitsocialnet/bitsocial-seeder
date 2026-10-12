@@ -10,7 +10,7 @@
       "license": "GPL-3.0-or-later",
       "dependencies": {
         "@bitsocial/bitsocial-cli": "0.19.99",
-        "@bitsocial/pubsub-voting": "0.7.9",
+        "@bitsocial/pubsub-voting": "0.7.10",
         "@chainsafe/libp2p-noise": "17.0.0",
         "@chainsafe/libp2p-yamux": "8.0.1",
         "@helia/bitswap": "4.0.14",
@@ -616,9 +616,9 @@
       }
     },
     "node_modules/@bitsocial/pubsub-voting": {
-      "version": "0.7.9",
-      "resolved": "https://registry.npmjs.org/@bitsocial/pubsub-voting/-/pubsub-voting-0.7.9.tgz",
-      "integrity": "sha512-PITa2sSGRsT9Ncp/CREPPuTTVcvWUdh2dDUiUk/rmEAgeyouY3iMO5KozPxWYmIpF+/Edo4GCA4/ls1oUfbZiw==",
+      "version": "0.7.10",
+      "resolved": "https://registry.npmjs.org/@bitsocial/pubsub-voting/-/pubsub-voting-0.7.10.tgz",
+      "integrity": "sha512-XNxLH8eURWh9cSlIH4LNos14DOpZSV7r1tAZjqhCVHE39hxYf2K8NuRXwwS+iaU/wmcNWZJV+hABPSgwwmJjwg==",
       "license": "GPL-3.0-or-later",
       "dependencies": {
         "@ipld/dag-cbor": "10.0.2",
