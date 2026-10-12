@@ -40,8 +40,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.94",
-    "@bitsocial/pubsub-voting": "0.7.7",
+    "@bitsocial/bitsocial-cli": "0.19.99",
+    "@bitsocial/pubsub-voting": "0.7.9",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
     "@helia/bitswap": "4.0.14",
@@ -60,7 +60,7 @@
     "@libp2p/tcp": "11.0.27",
     "@libp2p/websockets": "10.1.20",
     "@multiformats/multiaddr": "13.0.3",
-    "@pkcprotocol/pkc-js": "0.0.85",
+    "@pkcprotocol/pkc-js": "0.0.103",
     "@russellthehippo/honker-node": "0.4.5",
     "blockstore-fs": "4.0.1",
     "datastore-fs": "12.0.1",
@@ -70,10 +70,10 @@
     "kubo-rpc-client": "6.1.0",
     "libp2p": "3.3.9",
     "multiformats": "14.0.5",
-    "p-limit": "7.3.1",
+    "p-limit": "7.3.3",
     "string-strip-html": "13.4.8",
     "strip-json-comments": "5.0.3",
-    "viem": "2.56.0",
+    "viem": "2.57.4",
     "yargs": "17.7.1"
   },
   "repository": {
@@ -109,6 +109,7 @@
     "ws@8": "8.21.0",
     "@libp2p/gossipsub@16": "16.0.5",
     "decompress": "npm:@xhmikosr/decompress@11.1.4",
-    "image-size": "2.0.4"
+    "image-size": "2.0.4",
+    "@libp2p/interface": "3.3.0"
   }
 }
