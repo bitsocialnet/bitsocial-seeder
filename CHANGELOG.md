@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.10](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.9...v0.10.10) (2026-10-12)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.10`
+
+### Changes
+
+- chore(deps): pubsub-voting 0.7.10 (served checkpoint ages out decayed bundles, pubsub-voting#52) ([94248d9](https://github.com/bitsocialnet/bitsocial-seeder/commit/94248d928609e46f9dc5aaf260de44753073c7d7))
+
 ## [0.10.9](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.8...v0.10.9) (2026-10-12)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.9`
