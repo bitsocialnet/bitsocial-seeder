@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.9](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.8...v0.10.9) (2026-10-12)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.9`
+
+### Changes
+
+- docs(readme): seeders make NAT-hosted communities reachable from browsers ([e737519](https://github.com/bitsocialnet/bitsocial-seeder/commit/e7375197c00fb85c9919a2518c1d629fbd2b156f))
+- test: e2e browser publish to a NAT-hosted community through the seeder ([dc34e54](https://github.com/bitsocialnet/bitsocial-seeder/commit/dc34e543c19cd25a1e71d22661e7c99bc75ae551))
+- test: NAT owner discovers the seeder through the http router, no bootstrap peer ([18328de](https://github.com/bitsocialnet/bitsocial-seeder/commit/18328de8683d31bc4a01d0d8918719f6f83d8a0a))
+- test: bound the positive publish in the NAT owner e2e ([682cfb4](https://github.com/bitsocialnet/bitsocial-seeder/commit/682cfb4e24a96865172136be70670adb48b035b4))
+- chore(deps): pubsub-voting 0.7.9, bitsocial-cli 0.19.99 (pkc-js 0.0.103), viem 2.57.4 ([bc750ae](https://github.com/bitsocialnet/bitsocial-seeder/commit/bc750aeed0648717149a9f7ef97db546f19f2397))
+
 ## [0.10.8](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.7...v0.10.8) (2026-09-22)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.8`
