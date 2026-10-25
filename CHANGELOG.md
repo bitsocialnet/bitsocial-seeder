@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.11](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.10...v0.10.11) (2026-10-25)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.11`
+
+### Changes
+
+- ci: add Claude Code review workflow ([669f6e0](https://github.com/bitsocialnet/bitsocial-seeder/commit/669f6e023eb8c5e97aacd1bd60fefb61b4b70f04))
+- ci: update Claude Code review workflow from bitsocialnet/5chan [skip ci] [skip github-alerts] ([fb6c8b1](https://github.com/bitsocialnet/bitsocial-seeder/commit/fb6c8b1897178fd6228955d9fe1f48cb2425479f))
+- ci: update Claude Code review workflow from bitsocialnet/5chan [skip ci] [skip github-alerts] ([c500474](https://github.com/bitsocialnet/bitsocial-seeder/commit/c5004741daa95a9f593dccfb1f6491a939d3511c))
+- fix(deps): patch undici, zod, express and proxy-addr advisories [skip github-alerts] ([34514f3](https://github.com/bitsocialnet/bitsocial-seeder/commit/34514f39e3b4e349e24b9ccfee8835746fa6030f))
+
 ## [0.10.10](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.9...v0.10.10) (2026-10-12)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.10`
