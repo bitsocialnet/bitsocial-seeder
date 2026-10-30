@@ -637,9 +637,9 @@
       }
     },
     "node_modules/@bitsocial/bitsocial-cli/node_modules/@pkcprotocol/pkc-js/node_modules/undici": {
-      "version": "7.29.0",
-      "resolved": "https://registry.npmjs.org/undici/-/undici-7.29.0.tgz",
-      "integrity": "sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==",
+      "version": "7.30.1",
+      "resolved": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
+      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
       "license": "MIT",
       "engines": {
         "node": ">=20.18.1"
@@ -5131,9 +5131,9 @@
       }
     },
     "node_modules/@pkcprotocol/pkc-js/node_modules/undici": {
-      "version": "7.29.0",
-      "resolved": "https://registry.npmjs.org/undici/-/undici-7.29.0.tgz",
-      "integrity": "sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==",
+      "version": "7.30.1",
+      "resolved": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
+      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
       "license": "MIT",
       "engines": {
         "node": ">=20.18.1"
@@ -7555,9 +7555,9 @@
       }
     },
     "node_modules/cheerio/node_modules/undici": {
-      "version": "7.29.0",
-      "resolved": "https://registry.npmjs.org/undici/-/undici-7.29.0.tgz",
-      "integrity": "sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==",
+      "version": "7.30.1",
+      "resolved": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
+      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
       "license": "MIT",
       "engines": {
         "node": ">=20.18.1"
@@ -14357,9 +14357,9 @@
       }
     },
     "node_modules/open-graph-scraper/node_modules/undici": {
-      "version": "7.29.0",
-      "resolved": "https://registry.npmjs.org/undici/-/undici-7.29.0.tgz",
-      "integrity": "sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==",
+      "version": "7.30.1",
+      "resolved": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
+      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
       "license": "MIT",
       "engines": {
         "node": ">=20.18.1"
