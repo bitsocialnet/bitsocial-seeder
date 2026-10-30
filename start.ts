@@ -51,8 +51,13 @@ const shutdown = (signum: string) => {
   setTimeout(exit, 5000).unref()
   Promise.allSettled(shutdownCleanups.map(async cleanup => cleanup())).then(exit)
 }
-process.once('SIGINT', () => shutdown('SIGINT'))
-process.once('SIGTERM', () => shutdown('SIGTERM'))
+// process.on, not process.once: pkc-js bundles proper-lock-file, whose signal-exit hook
+// re-raises the signal with the default action (killing the process, exit status SIGINT)
+// whenever it finds itself the only listener left. A once-listener is detached before it
+// runs, so the shutdown below would be cut off; a persistent one keeps signal-exit idle, and
+// the shuttingDown guard already turns a repeated signal into an immediate exit.
+process.on('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
 
 // A sleep that returns early on shutdown, so a long daemon-retry backoff cannot hold the
 // process past the 5s grace window. The listener is removed on both paths: an { once: true }

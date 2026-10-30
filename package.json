@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bitsocial/bitsocial-cli": "0.19.99",
+    "@bitsocial/bitsocial-cli": "0.19.117",
     "@bitsocial/pubsub-voting": "0.7.10",
     "@chainsafe/libp2p-noise": "17.0.0",
     "@chainsafe/libp2p-yamux": "8.0.1",
@@ -60,7 +60,7 @@
     "@libp2p/tcp": "11.0.27",
     "@libp2p/websockets": "10.1.20",
     "@multiformats/multiaddr": "13.0.3",
-    "@pkcprotocol/pkc-js": "0.0.103",
+    "@pkcprotocol/pkc-js": "0.0.131",
     "@russellthehippo/honker-node": "0.4.5",
     "blockstore-fs": "4.0.1",
     "datastore-fs": "12.0.1",
@@ -106,7 +106,7 @@
     "undici@7": "7.30.1",
     "undici@8": "8.12.3",
     "uuid@13": "13.0.1",
-    "ws@8": "8.21.0",
+    "ws@8": "8.22.0",
     "@libp2p/gossipsub@16": "16.0.5",
     "decompress": "npm:@xhmikosr/decompress@11.1.4",
     "image-size": "2.0.4",
