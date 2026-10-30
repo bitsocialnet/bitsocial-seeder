@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.12](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.11...v0.10.12) (2026-10-30)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.12`
+
+### Changes
+
+- chore(deps): pkc-js 0.0.131, bitsocial-cli 0.19.117; keep shutdown handlers past pkc-js's signal-exit ([aabcafc](https://github.com/bitsocialnet/bitsocial-seeder/commit/aabcafcf03cd7025228bd0e5172a7d8cbfc9a9ac))
+- chore(deps): raise the undici@7 override to 7.30.1, the copy pkc-js 0.0.131 pins ([ca54045](https://github.com/bitsocialnet/bitsocial-seeder/commit/ca5404590ab8f3899ce8c539026c42fed95cf960))
+- chore(deps): raise the ws@8 override to 8.22.0, the copy pkc-js 0.0.131 pins ([324cc15](https://github.com/bitsocialnet/bitsocial-seeder/commit/324cc1528bae17488720787c6352d941325d040f))
+- chore: retrigger workflow runs ([44c659d](https://github.com/bitsocialnet/bitsocial-seeder/commit/44c659d61c613232e8f75f19c9a60519a8ce7630))
+
 ## [0.10.11](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.10...v0.10.11) (2026-10-25)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.11`
