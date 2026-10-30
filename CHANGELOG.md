@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.13](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.12...v0.10.13) (2026-10-30)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.13`
+
+### Changes
+
+- chore(deps): drop the ws@8 override ([3d67e34](https://github.com/bitsocialnet/bitsocial-seeder/commit/3d67e3482076996183fbaea09db830f7795aae78))
+
 ## [0.10.12](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.11...v0.10.12) (2026-10-30)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.12`
