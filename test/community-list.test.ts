@@ -139,6 +139,22 @@ test('extracts community content pins without duplicates', () => {
   ])
 })
 
+test('pins the community record by its updateCid', () => {
+  const {pins, pageCidCount, postUpdatesCount} = getCommunityContentPins({
+    updateCid: 'bafy-update',
+    posts: {pageCids: {hot: 'bafy-page-hot'}},
+    postUpdates: {recent: 'bafy-post-updates'}
+  })
+
+  assert.equal(pageCidCount, 1)
+  assert.equal(postUpdatesCount, 1)
+  assert.deepEqual(pins, [
+    {name: 'page hot', cid: 'bafy-page-hot'},
+    {name: 'post updates recent', cid: 'bafy-post-updates'},
+    {name: 'update', cid: 'bafy-update'}
+  ])
+})
+
 test('extracts pubsub routing pins including ipns over pubsub', () => {
   const pins = getCommunityPubsubTopicRoutingPins({
     pubsubTopic: 'community-topic',
