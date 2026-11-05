@@ -18,11 +18,18 @@ export const getCommunityContentPins = (community: any) => {
   for (const timeBucket in community.postUpdates || {}) {
     cidsToPin.push({name: `post updates ${timeBucket}`, cid: community.postUpdates[timeBucket]})
   }
+  const postUpdatesCount = cidsToPin.length - pageCidCount
+
+  // The community record itself. Kubo only caches it after fetching, and bitsocial-cli runs an
+  // hourly repo gc, so without a pin the node loses the current record until the next publish.
+  if (typeof community.updateCid === 'string') {
+    cidsToPin.push({name: 'update', cid: community.updateCid})
+  }
 
   return {
     pins: uniqueByCid(cidsToPin),
     pageCidCount,
-    postUpdatesCount: cidsToPin.length - pageCidCount
+    postUpdatesCount
   }
 }
 
