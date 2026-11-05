@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.14](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.13...v0.10.14) (2026-11-05)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.14`
+
+### Changes
+
+- fix: pin each community's current record (updateCid) ([617abc4](https://github.com/bitsocialnet/bitsocial-seeder/commit/617abc4c046db84e561c61deca18a4177b538fc6))
+
 ## [0.10.13](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.12...v0.10.13) (2026-10-30)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.13`
