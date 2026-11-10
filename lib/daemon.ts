@@ -12,10 +12,8 @@ const localHostnames = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::
 
 let bundledDaemon: ChildProcess | undefined
 let daemonWasReady = false
-let shuttingDown = false
 let stoppingProgrammatically = false
-let shutdownHandlersInstalled = false
-let shutdownTimer: NodeJS.Timeout | undefined
+let exitHookInstalled = false
 
 const parseUrl = (urlString: string) => {
   try {
@@ -181,10 +179,10 @@ const stopBundledDaemon = (signal: NodeJS.Signals = 'SIGINT') => {
   }
 }
 
-// Graceful programmatic stop for embedders (tests, future API use): SIGINT the
-// bundled daemon so bitsocial-cli shuts down its communities and kubo, escalate
-// to SIGKILL after the grace window. Unlike the signal-driven shutdown path,
-// this never calls process.exit — the caller decides what happens next.
+// Graceful stop: SIGINT the bundled daemon so bitsocial-cli shuts down its
+// communities and kubo, escalate to SIGKILL after the grace window. This module
+// installs no signal handlers of its own and never calls process.exit here: the
+// caller owns shutdown (start.ts runs this as one of its shutdown cleanups).
 export const stopDaemon = (timeoutMs = 20000) => {
   if (!bundledDaemon || bundledDaemon.exitCode !== null || bundledDaemon.signalCode !== null) {
     return Promise.resolve()
@@ -200,35 +198,21 @@ export const stopDaemon = (timeoutMs = 20000) => {
   })
 }
 
-const installShutdownHandlers = () => {
-  if (shutdownHandlersInstalled) {
+// Last resort only: a graceful shutdown stops the daemon with stopDaemon() before exiting, and
+// this catches every other way out (a crash, a second signal) so the child is never left behind.
+// No signal handlers here: a second shutdown path would race the embedder's, whose exit fires
+// this hook and SIGKILLs a daemon that is still stopping.
+const installExitHook = () => {
+  if (exitHookInstalled) {
     return
   }
-  shutdownHandlersInstalled = true
-  const shutdown = (signal: NodeJS.Signals) => {
-    if (shuttingDown) {
-      process.exit(1)
-    }
-    shuttingDown = true
-    stopBundledDaemon()
-    shutdownTimer = setTimeout(() => {
-      stopBundledDaemon('SIGKILL')
-      process.exit(0)
-    }, 20000)
-  }
-  process.once('SIGINT', shutdown)
-  process.once('SIGTERM', shutdown)
-  process.once('exit', () => {
-    if (shutdownTimer) {
-      clearTimeout(shutdownTimer)
-    }
-    stopBundledDaemon('SIGKILL')
-  })
+  exitHookInstalled = true
+  process.once('exit', () => stopBundledDaemon('SIGKILL'))
 }
 
 // True only while a daemon this process spawned is still alive. The 'exit' handler clears
 // `bundledDaemon`, but it fires a tick late, so the child's own exit state is checked too.
-const isBundledDaemonRunning = () =>
+export const isBundledDaemonRunning = () =>
   Boolean(bundledDaemon && bundledDaemon.exitCode === null && bundledDaemon.signalCode === null)
 
 const startBundledDaemon = () => {
@@ -251,7 +235,7 @@ const startBundledDaemon = () => {
   bundledDaemon.stdout!.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
   bundledDaemon.stderr!.on('data', chunk => prefixOutput('[bitsocial daemon] ', chunk))
   bundledDaemon.once('error', error => {
-    if (!shuttingDown && !stoppingProgrammatically && daemonWasReady) {
+    if (!stoppingProgrammatically && daemonWasReady) {
       console.error(`bundled bitsocial daemon process error: ${error.message}`)
       process.exit(1)
     }
@@ -260,14 +244,7 @@ const startBundledDaemon = () => {
     if (stoppingProgrammatically) {
       return
     }
-    if (shuttingDown) {
-      if (shutdownTimer) {
-        clearTimeout(shutdownTimer)
-      }
-      process.exit(0)
-      return
-    }
-    if (!shuttingDown && daemonWasReady) {
+    if (daemonWasReady) {
       console.error(`bundled bitsocial daemon exited unexpectedly (code: ${code}, signal: ${signal})`)
       process.exit(code || 1)
     }
@@ -276,7 +253,7 @@ const startBundledDaemon = () => {
     // ensureDaemon() spawns a fresh daemon instead of waiting on this corpse forever.
     bundledDaemon = undefined
   })
-  installShutdownHandlers()
+  installExitHook()
   return bundledDaemon
 }
 

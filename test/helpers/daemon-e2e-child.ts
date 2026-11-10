@@ -58,6 +58,12 @@ fs.writeFileSync(kuboConfigPath, JSON.stringify(kuboConfig, null, 2))
 step(`kubo repo pre-initialized, pkc=${pkcPort} kubo=${kuboPort} gateway=${gatewayPort}`)
 
 const {ensureDaemon, stopDaemon} = await import('../../lib/daemon.ts')
+// lib/daemon.ts handles no signals, and spawnSync's timeout in test/daemon-e2e.test.ts SIGTERMs
+// this process: stop the daemon first, or bitsocial-cli and its Kubo outlive a timed-out run.
+process.on('SIGTERM', () => {
+  step('SIGTERM, stopping daemon')
+  stopDaemon(5000).finally(() => process.exit(1))
+})
 
 let exitCode = 0
 try {

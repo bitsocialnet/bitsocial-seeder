@@ -169,6 +169,90 @@ test('start.ts applies the default cap before subscribing, including on a legacy
   }
 })
 
+// start.ts and lib/daemon.ts used to run separate shutdown machines. On a communities-only
+// seeder start.ts had no cleanups, so it exited in the same tick as the signal, and daemon.ts's
+// exit hook SIGKILLed the bundled daemon right after its own handler had sent it SIGINT:
+// bitsocial-cli never got to stop its Kubo (left running outside Docker, hard-killed inside).
+// The bundled daemon here is a fake (helpers/fake-bundled-daemon.ts) that takes a second to stop.
+test('a shutdown signal lets the bundled daemon stop gracefully before start.ts exits', {timeout: 90_000}, async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-bundled-stop-'))
+  const [pkcPort, kuboPort] = await Promise.all([getFreePort(), getFreePort()])
+  const daemonLog = path.join(tmpDir, 'fake-daemon.log')
+  const listPath = path.join(tmpDir, 'communities.json')
+  fs.writeFileSync(listPath, JSON.stringify({communities: [{address: 'bundled-stop.bso'}]}))
+
+  const child = spawn(process.execPath, [
+    '--import', path.join(import.meta.dirname, 'helpers', 'fake-bundled-daemon-preload.ts'),
+    path.resolve(import.meta.dirname, '..', 'start.ts')
+  ], {
+    cwd: tmpDir,
+    env: {
+      ...process.env,
+      PKC_RPC_URL: `ws://127.0.0.1:${pkcPort}`,
+      KUBO_RPC_URL: `http://127.0.0.1:${kuboPort}/api/v0`,
+      SEEDER_DAEMON_AUTOSTART: 'true',
+      SEEDER_DAEMON_READY_STABLE_MS: '200',
+      SEEDER_TEST_DAEMON_LOG: daemonLog,
+      COMMUNITY_LIST_SOURCES: listPath,
+      COMMUNITY_EXTRA_LIST_SOURCES: '',
+      VOTES_MANIFEST_SOURCES: 'none',
+      SEEDER_DB_PATH: path.join(tmpDir, 'seeder.db'),
+      SEEDER_STATE_PATH: path.join(tmpDir, 'seederState.json'),
+      SEEDER_UPDATE_CHECK_ENABLED: 'false'
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  let output = ''
+  const seedingLine = new Promise<void>(resolve => {
+    const onData = (chunk: Buffer) => {
+      output += chunk.toString()
+      if (/seeding \d+ communities/.test(output)) {
+        resolve()
+      }
+    }
+    child.stdout!.on('data', onData)
+    child.stderr!.on('data', onData)
+  })
+  const exited = new Promise<{code: number | null, signal: string | null}>(resolve => {
+    child.once('exit', (code, signal) => resolve({code, signal}))
+  })
+  const timeout = (ms: number, what: string) => new Promise<never>((resolve, reject) => setTimeout(
+    () => reject(Error(`timed out waiting for ${what}\noutput:\n${output}`)),
+    ms
+  ).unref())
+  const readDaemonLog = () => fs.existsSync(daemonLog) ? fs.readFileSync(daemonLog, 'utf8') : ''
+
+  try {
+    await Promise.race([
+      seedingLine,
+      exited.then(({code, signal}) => {
+        throw Error(`start.ts exited before seeding started (code: ${code}, signal: ${signal})\noutput:\n${output}`)
+      }),
+      timeout(60_000, 'the seeding log line')
+    ])
+    assert.match(output, /starting bundled bitsocial daemon/)
+
+    child.kill('SIGTERM')
+    const {code, signal} = await Promise.race([exited, timeout(30_000, 'a clean shutdown')])
+    const daemonEvents = readDaemonLog()
+    assert.match(daemonEvents, /received SIGINT/)
+    assert.match(daemonEvents, /stopped gracefully/, `the bundled daemon must finish stopping before start.ts exits\ndaemon log:\n${daemonEvents}\noutput:\n${output}`)
+    assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
+    assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+  }
+  finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
+    const daemonPid = Number(readDaemonLog().match(/started (\d+)/)?.[1])
+    if (daemonPid) {
+      try { process.kill(daemonPid, 'SIGKILL') } catch {}
+    }
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
+})
+
 // One contest, same shape as the published manifest, kept local so the votes-only tests never
 // fetch the real one.
 const writeVotesManifest = (tmpDir: string) => {

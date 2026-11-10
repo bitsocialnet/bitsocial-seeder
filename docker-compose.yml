@@ -5,6 +5,9 @@ services:
       context: .
     container_name: bitsocial-seeder
     restart: unless-stopped
+    # On SIGTERM the seeder stops its bundled daemon before exiting and gives bitsocial-cli up
+    # to 20s to shut down its communities and Kubo; Docker's default 10s would SIGKILL it midway.
+    stop_grace_period: 30s
     # Hard backstop above the heap cap (native/buffer memory included).
     mem_limit: 2g
     network_mode: host

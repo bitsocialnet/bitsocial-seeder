@@ -8,7 +8,7 @@ console.log({argv})
 import config from './config.ts'
 import {db} from './lib/db.ts'
 import {discoverCommunitiesFromLists} from './lib/discover-communities.ts'
-import {ensureDaemon} from './lib/daemon.ts'
+import {ensureDaemon, isBundledDaemonRunning, stopDaemon} from './lib/daemon.ts'
 import seederState from './lib/seeder-state.ts'
 import {checkRuntimeDependencyUpdates, checkForUpdate} from './lib/update-check.ts'
 
@@ -34,6 +34,14 @@ let shuttingDown = false
 // Async teardown hooks (e.g. the votes seeder flushing its checkpoint snapshot) that should
 // finish inside the shutdown grace window; failures never block exit.
 const shutdownCleanups: (() => any)[] = []
+// A bundled daemon is stopped here, as one of the cleanups, so this is the only place that
+// decides when the process exits: bitsocial-cli gets to stop its communities and its Kubo, and
+// a daemon that exits first cannot cut off the votes checkpoint flush. stopDaemon() SIGKILLs
+// it after this long, and resolves at once when there is no bundled daemon.
+const daemonStopGraceMs = 20000
+if (communitiesEnabled) {
+  shutdownCleanups.push(() => stopDaemon(daemonStopGraceMs))
+}
 const shutdown = (signum: string) => {
   if (shuttingDown) {
     process.exit(1)
@@ -47,8 +55,10 @@ const shutdown = (signum: string) => {
   }
   // Exit as soon as the cleanups settle — voter.destroy() is what flushes the debounced
   // checkpoint write, so cutting it off at a fixed sleep could lose votes on a slow disk —
-  // with the grace timer as the backstop against a hung cleanup.
-  setTimeout(exit, 5000).unref()
+  // with the grace timer as the backstop against a hung cleanup. With a bundled daemon to stop
+  // the backstop outlasts stopDaemon()'s own SIGKILL deadline; exiting first would fire
+  // lib/daemon.ts's exit hook and SIGKILL a daemon that is still shutting down.
+  setTimeout(exit, isBundledDaemonRunning() ? daemonStopGraceMs + 5000 : 5000).unref()
   Promise.allSettled(shutdownCleanups.map(async cleanup => cleanup())).then(exit)
 }
 // process.on, not process.once: pkc-js bundles proper-lock-file, whose signal-exit hook
@@ -60,7 +70,7 @@ process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
 // A sleep that returns early on shutdown, so a long daemon-retry backoff cannot hold the
-// process past the 5s grace window. The listener is removed on both paths: an { once: true }
+// process past the shutdown backstop. The listener is removed on both paths: an { once: true }
 // listener is only detached by the platform when the event actually fires, and every timer
 // that expires normally would otherwise leave one behind on a process-lifetime signal.
 const sleepOrAbort = (ms: number) => new Promise<void>(resolve => {
@@ -271,10 +281,16 @@ else if (communitiesEnabled) {
     await ensureDaemon()
   }
   catch (error: any) {
-    console.error(error?.message || error)
-    process.exit(1)
+    // A shutdown signal stops a bundled daemon that is still booting, which fails
+    // ensureDaemon(); shutdown() owns the exit then.
+    if (!signal.aborted) {
+      console.error(error?.message || error)
+      process.exit(1)
+    }
   }
-  await startCommunitySeeding()
+  if (!signal.aborted) {
+    await startCommunitySeeding()
+  }
 }
 else {
   console.log('community seeding disabled (COMMUNITY_LIST_SOURCES=none), seeding votes only (no bitsocial daemon needed)')
