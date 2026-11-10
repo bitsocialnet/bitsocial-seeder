@@ -329,6 +329,12 @@ const waitForDaemon = async (daemonProcess: ChildProcess | undefined, timeoutMs:
 export const ensureDaemon = async () => {
   const status = await checkDaemonEndpoints()
   if (status.ready) {
+    // The daemon answering can be the one this process spawned, ready only after an earlier
+    // attempt timed out on it. It is still ours to watch: mark it ready, or its later crash
+    // would just drop the handle instead of taking the exit path below.
+    if (isBundledDaemonRunning()) {
+      daemonWasReady = true
+    }
     console.log('using existing bitsocial daemon RPCs')
     await warnIfExistingDaemonMayBeStale({pkcRpcUrl: config.pkcRpcUrl})
     return {started: false, status}
