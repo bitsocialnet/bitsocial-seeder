@@ -109,7 +109,7 @@ try {
   const {default: seederState} = await import('../../lib/seeder-state.ts')
   const {db} = await import('../../lib/db.ts')
   seederState.communitiesSeeding = [{address: community.address}]
-  const {subscribeCommunitiesUpdates, pinOpQueue, pubsubRoutingQueue} = await import('../../lib/seed-communities.ts')
+  const {subscribeCommunitiesUpdates, joinPubsubTopics, pinOpQueue, pubsubRoutingQueue} = await import('../../lib/seed-communities.ts')
   await subscribeCommunitiesUpdates()
 
   const deadline = Date.now() + 60_000
@@ -137,6 +137,25 @@ try {
   }
   assert.ok(providedJobs > 0, 'the community update should queue at least one routing provide')
   step(`provided and pinned ${providedJobs} pubsub routing cids`)
+
+  // The pubsub tick against a real Kubo. Each tick drops joins Kubo's pubsub ls no longer
+  // lists, so the topic strings ls returns must match the ones subscribed with, or every tick
+  // would rejoin every community: two ticks must subscribe the community's topic exactly once.
+  const subscribedTopics: string[] = []
+  const subscribe = kuboPubsub.pubsub.subscribe
+  ;(kuboPubsub.pubsub as any).subscribe = (topic: string, ...args: any[]) => {
+    subscribedTopics.push(topic)
+    return (subscribe as any)(topic, ...args)
+  }
+  const communityTopic = community.pubsubTopic
+  assert.ok(communityTopic, 'the hosted community should have a pubsub topic')
+  await joinPubsubTopics()
+  await sleep(1500)
+  assert.equal((await kuboPubsub.pubsub.ls()).includes(communityTopic), true)
+  await joinPubsubTopics()
+  await sleep(1500)
+  assert.deepEqual(subscribedTopics, [communityTopic], 'a second pubsub tick must keep the join')
+  step('pubsub tick joins the community topic once and keeps it')
 
   // Content pins: publish a post into the challenge-less community and wait
   // for a later community update to track its content cids (postUpdates
