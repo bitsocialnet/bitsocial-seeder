@@ -107,6 +107,14 @@ const runTickWorker = async (queue: any, workerId: string, processFn: () => any)
 const scheduler = db.scheduler()
 const everyS = (ms: any) => `@every ${Math.max(1, Math.floor(Number(ms) / 1000))}s`
 
+// Those rows persist, so an earlier run's entries keep firing on this boot even for a half that
+// is now off (COMMUNITY_LIST_SOURCES=none, VOTES_MANIFEST_SOURCES=none) or, for the community
+// half, not started yet: their ticks would pile up unclaimed and then all run back to back once
+// a worker drains them. Drop them; each half re-adds its own entries once its workers exist.
+for (const name of ['discover-tick', 'subscribe-tick', 'pubsub-tick', 'votes-tick']) {
+  scheduler.remove(name)
+}
+
 // --- update check worker (no daemon dependency, start immediately) ---
 runTickWorker(updateCheckTickQ, 'update-check-worker', async () => {
   if (config.updateCheck.enabled === false) {

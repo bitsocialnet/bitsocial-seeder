@@ -6,6 +6,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import honker from '@russellthehippo/honker-node'
 import {createFakeKuboRpcServer, createFakePkcRpcServer} from './helpers/fake-daemon-rpcs.ts'
 
 const getFreePort = () => new Promise<number>((resolve, reject) => {
@@ -16,6 +17,35 @@ const getFreePort = () => new Promise<number>((resolve, reject) => {
   })
   server.once('error', reject)
 })
+
+// Scheduler entries are rows in seeder.db, so they outlive the run that registered them. This
+// leaves a database the way an earlier run with the other half enabled would have, with the
+// entries overdue so the scheduler fires them as soon as it runs.
+const registerStaleSchedulerEntries = (dbPath: string, names: string[]) => {
+  const db = honker.open(dbPath)
+  try {
+    const scheduler = db.scheduler()
+    for (const name of names) {
+      scheduler.add({name, queue: name, schedule: '@every 600s', payload: {}})
+    }
+    db.query('UPDATE _honker_scheduler_tasks SET next_fire_at = 0')
+  }
+  finally {
+    db.close()
+  }
+}
+const readSchedulerState = (dbPath: string) => {
+  const db = honker.open(dbPath)
+  try {
+    return {
+      entries: db.scheduler().list().map((entry: any) => entry.name).sort(),
+      queuedTicks: db.query('SELECT queue FROM _honker_live').map((row: any) => row.queue)
+    }
+  }
+  finally {
+    db.close()
+  }
+}
 
 // The published entrypoint is the bin shim (a bare `import '../start.ts'`). Run it with both
 // halves explicitly switched off ('none') so it exercises the shim and start.ts's
@@ -65,6 +95,9 @@ test('start.ts applies the default cap before subscribing, including on a legacy
   const communities = Array.from({length: 25}, (_, i) => ({address: `boot-${i}.bso`}))
   fs.writeFileSync(listPath, JSON.stringify({communities}))
   fs.writeFileSync(path.join(tmpDir, 'seederState.json'), JSON.stringify({communitiesSeeding: communities}))
+  // Left by an earlier run with votes on: with votes off nothing claims its ticks.
+  const dbPath = path.join(tmpDir, 'seeder.db')
+  registerStaleSchedulerEntries(dbPath, ['votes-tick'])
 
   const child = spawn(process.execPath, [path.resolve(import.meta.dirname, '..', 'start.ts')], {
     cwd: tmpDir,
@@ -121,6 +154,11 @@ test('start.ts applies the default cap before subscribing, including on a legacy
     assert.match(output, /received SIGINT, shutting down/)
     assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
     assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+
+    // The stale votes entry is gone and fired nothing; the community entries are this run's.
+    const {entries, queuedTicks} = readSchedulerState(dbPath)
+    assert.deepEqual(entries, ['discover-tick', 'pubsub-tick', 'subscribe-tick'])
+    assert.ok(!queuedTicks.includes('votes-tick'), `no votes ticks may pile up: ${queuedTicks}`)
   }
   finally {
     if (child.exitCode === null && child.signalCode === null) {
@@ -180,6 +218,11 @@ test('start.ts boots votes-only when community seeding is off', {timeout: 120_00
   ])
 
   const manifestPath = writeVotesManifest(tmpDir)
+  // Left by an earlier run with communities on (switching to votes-only is the README's
+  // documented move): nothing claims those ticks on a votes-only seeder.
+  const dbPath = path.join(tmpDir, 'seeder.db')
+  const communityTickNames = ['discover-tick', 'subscribe-tick', 'pubsub-tick']
+  registerStaleSchedulerEntries(dbPath, communityTickNames)
 
   const child = spawn(process.execPath, [path.resolve(import.meta.dirname, '..', 'start.ts')], {
     cwd: tmpDir,
@@ -244,6 +287,11 @@ test('start.ts boots votes-only when community seeding is off', {timeout: 120_00
     assert.match(output, /received SIGINT, shutting down/)
     assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
     assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+
+    // The stale community entries are gone and fired nothing.
+    const {entries, queuedTicks} = readSchedulerState(dbPath)
+    assert.deepEqual(entries, ['votes-tick'])
+    assert.deepEqual(queuedTicks.filter(queue => communityTickNames.includes(queue)), [], 'no community ticks may pile up')
   }
   finally {
     if (child.exitCode === null && child.signalCode === null) {
