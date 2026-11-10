@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.15](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.14...v0.10.15) (2026-11-10)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.15`
+
+### Changes
+
+- chore(deps): pkc-js 0.0.138, pubsub-voting 0.7.12, bitsocial-cli 0.19.129, libp2p and helia to latest ([5e3c390](https://github.com/bitsocialnet/bitsocial-seeder/commit/5e3c390371faccf576c03b03d5e8e09f9e48c5a2))
+
 ## [0.10.14](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.13...v0.10.14) (2026-11-05)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.14`
