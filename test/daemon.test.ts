@@ -301,3 +301,49 @@ test('ensureDaemon fails fast when autostart is disabled and the endpoints are d
   })
   assert.equal(result.status, 0, `child failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`)
 })
+
+// A combined seeder retries ensureDaemon() with backoff. When the bundled daemon outlived the
+// first attempt's ready timeout and came up during the backoff, the retry adopted it through
+// the "already ready" fast path without marking it ready, so its later crash only dropped the
+// handle: no log, no exit for the supervisor, and community seeding stayed dead with the
+// daemon gone. Runs in a child process because the expected outcome is process.exit().
+test('a bundled daemon adopted on a retry after a ready timeout still exits the seeder when it dies', async () => {
+  const [childPkcPort, childKuboPort] = await Promise.all([getFreePort(), getFreePort()])
+  const result = runEnsureDaemonChild(`
+    import assert from 'node:assert/strict'
+    import childProcess from 'node:child_process'
+    import {syncBuiltinESMExports} from 'node:module'
+    const realSpawn = childProcess.spawn
+    let bundled
+    // A bitsocial-cli daemon that is alive but slow to bring its RPCs up.
+    childProcess.spawn = (command, args, options) => {
+      bundled = realSpawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], options)
+      return bundled
+    }
+    syncBuiltinESMExports()
+    const {createFakeKuboRpcServer, createFakePkcRpcServer} = await import('./test/helpers/fake-daemon-rpcs.ts')
+    const {ensureDaemon} = await import('./lib/daemon.ts')
+
+    await assert.rejects(ensureDaemon(), /timed out waiting for bitsocial daemon RPCs/)
+    // The same daemon finishes booting during the retry backoff, and the retry uses it.
+    await Promise.all([
+      createFakePkcRpcServer().listen(${childPkcPort}),
+      createFakeKuboRpcServer().listen(${childKuboPort})
+    ])
+    await ensureDaemon()
+    // Later it crashes.
+    bundled.kill('SIGKILL')
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    console.log('the seeder kept running after its bundled daemon died')
+    process.exit(0)
+  `, {
+    PKC_RPC_URL: `ws://127.0.0.1:${childPkcPort}`,
+    KUBO_RPC_URL: `http://127.0.0.1:${childKuboPort}/api/v0`,
+    SEEDER_DAEMON_AUTOSTART: 'true',
+    SEEDER_DAEMON_READY_TIMEOUT_MS: '1500',
+    SEEDER_DAEMON_READY_STABLE_MS: '200'
+  })
+  assert.doesNotMatch(result.stdout, /kept running/, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`)
+  assert.match(result.stderr, /bundled bitsocial daemon exited unexpectedly \(code: null, signal: SIGKILL\)/)
+  assert.equal(result.status, 1)
+})

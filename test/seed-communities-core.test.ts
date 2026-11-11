@@ -242,3 +242,39 @@ test('runOneWorker acks successful jobs and retries failures with a delay', asyn
   assert.equal(rows[0].attempts, 1)
   assert.ok(rows[0].run_at > Math.floor(Date.now() / 1000) + 50, 'the retry should be delayed ~60s')
 })
+
+// community_pins records a cid when its add is queued, and a tracked cid is never queued
+// again. An add that failed every attempt (Kubo down for the ~2 minutes of retries, content
+// unretrievable) used to stay tracked after honker abandoned the job: the cid was never
+// pinned, yet every later update counted it as pinned, across restarts.
+test('a pin add that exhausts its attempts is untracked and queued again on the next update', async () => {
+  const failedKey = 'failed-pin-community-key'
+  handleCommunityUpdate(makeCommunity(), failedKey)
+  drainQueue(pubsubRoutingQueue)
+  const tracked = () => db.query('SELECT cid FROM community_pins WHERE community_key = ?', [failedKey]).map((row: any) => row.cid).sort()
+  const contentCids = ['cid-page-hot', 'cid-page-hot-next', 'cid-page-new', 'cid-post-updates']
+  assert.deepEqual(tracked().filter((cid: string) => contentCids.includes(cid)), contentCids)
+
+  // Run the pin worker's claim/fail/retry cycle until honker gives up on every job, skipping
+  // the 60s retry delay between attempts.
+  const processPinOp = makeProcessPinOp({pin: {add: async () => { throw Error('kubo rpc connection refused') }}})
+  let attempts = 0
+  while (true) {
+    db.query(`UPDATE _honker_live SET run_at = 0 WHERE queue = 'pin-op'`)
+    const job = pinOpQueue.claimOne('test-pin-worker')
+    if (!job) {
+      break
+    }
+    attempts++
+    await assert.rejects(processPinOp(job), /connection refused/)
+    job.retry(60, 'kubo rpc connection refused')
+  }
+  assert.equal(attempts, contentCids.length * pinOpQueue.maxAttempts)
+
+  // The abandoned cids are no longer counted as pinned, so the next update queues them again.
+  assert.deepEqual(tracked(), ['cid-ipns-pubsub-routing', 'cid-pubsub-routing'])
+  handleCommunityUpdate(makeCommunity(), failedKey)
+  const pinOps = drainQueue(pinOpQueue)
+  assert.deepEqual(pinOps.map((op: any) => op.op), ['add', 'add', 'add', 'add'])
+  assert.deepEqual(pinOps.map((op: any) => op.cid).sort(), contentCids)
+})

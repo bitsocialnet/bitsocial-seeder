@@ -154,11 +154,23 @@ export const runOneWorker = async (queue: any, workerId: string, signal: AbortSi
 }
 
 export const makeProcessPinOp = (kubo: any) => async (job: any) => {
-  const {op, cid, name, communityAddress} = job.payload
+  const {op, cid, name, communityAddress, communityKey} = job.payload
   const before = Date.now()
   if (op === 'add') {
     console.log(`${communityAddress} pin add ${cid} (${name || ''})`)
-    await kubo.pin.add(cid, {recursive: true})
+    try {
+      await kubo.pin.add(cid, {recursive: true})
+    }
+    catch (error) {
+      // community_pins tracks the cid from the moment its add is queued, and a tracked cid is
+      // never queued again. When this was the last attempt honker abandons the job, so untrack
+      // the cid: the community's next update queues a fresh add instead of counting it pinned.
+      if (job.attempts >= pinOpQueue.maxAttempts) {
+        db.query('DELETE FROM community_pins WHERE community_key = ? AND cid = ?', [communityKey, cid])
+        console.log(`${communityAddress} pin add ${cid} failed ${job.attempts} times, giving up until the next community update`)
+      }
+      throw error
+    }
     console.log(`${communityAddress} pinned ${cid} in ${(Date.now() - before) / 1000}s`)
   }
   else if (op === 'remove') {
