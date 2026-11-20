@@ -14,7 +14,7 @@ No — and for most users it is not the recommended way. Bitsocial desktop apps 
 
 A publicly reachable seeder also serves a role the apps usually cannot: it makes communities hosted behind NAT loadable from browsers. Most desktop nodes sit behind home routers, carrier-grade NAT, or mobile hotspots without port forwarding, so their Kubo announces only relayed (`/p2p-circuit`) addresses. A browser node cannot hole-punch to such a node (Kubo has no WebRTC private-to-private transport), and a relayed connection is too limited to serve pages, so a community whose only provider is its owner's NATed node never loads on web clients such as 5chan.app (see [pkc-js#369](https://github.com/pkcprotocol/pkc-js/issues/369)). A seeder on a public IP pins the community's record, pages and post updates and joins its pubsub topic, giving browsers a dialable peer to fetch from.
 
-This is also an **experimental repository**. Releases are cut frequently, internals change without warning between minor versions, and the project is treated as a place to try ideas that benefit the protocol but are not on its critical path. Please file issues if you hit anything; expect bumps.
+The seeder runs in production for Bitsocial's own communities. Releases are frequent, and until 1.0 a minor version can change internals or configuration, so read the release notes before upgrading. Please file an issue if you hit anything.
 
 ## Posting to communities hosted behind NAT
 
