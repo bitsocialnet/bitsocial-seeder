@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.16](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.15...v0.10.16) (2026-11-20)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.16`
+
+### Changes
+
+- chore(ci): skip Claude reviews on draft PRs [skip ci] [skip github-alerts] ([54e1241](https://github.com/bitsocialnet/bitsocial-seeder/commit/54e12415a73e72400e63a7707a6d23eab5153d6d))
+- docs(readme): stop calling the seeder an experimental repository ([7cd963b](https://github.com/bitsocialnet/bitsocial-seeder/commit/7cd963b6e9ac4c10df17c1b4e909b9f74180787c))
+
 ## [0.10.15](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.14...v0.10.15) (2026-11-10)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.15`
