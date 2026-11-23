@@ -224,6 +224,7 @@ The default config expects:
 
 On Linux hosts the compose file uses `network_mode: host`, so the container can reach the host daemon through `127.0.0.1`.
 If no host daemon is running, the container starts its bundled daemon on those same local RPC addresses.
+On SIGTERM or SIGINT the seeder stops that bundled daemon before it exits, giving bitsocial-cli up to 20 seconds to shut down its communities and Kubo before it is killed; the compose file sets `stop_grace_period: 30s` so Docker waits for it. An external daemon is left running.
 
 **A daemon that is down does not stop a combined seeder from seeding votes.** On a seeder running both halves, the daemon is a dependency of the community half only, so an unreachable or slow-to-start daemon no longer exits the process — the votes workers start immediately and the daemon is retried in the background (10s, doubling to 5 minutes), logging `community seeding is DOWN … votes seeding is unaffected` on each attempt. The community workers start as soon as it comes up. This matters under `restart: unless-stopped`: exiting used to crash-loop the container, and every restart re-ran the votes cold join and re-announced to the routers, degrading votes seeding for a reason unrelated to it. A **communities-only** seeder still exits on a daemon failure, because nothing would be left running.
 

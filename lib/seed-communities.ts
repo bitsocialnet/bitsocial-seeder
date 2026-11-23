@@ -1,5 +1,5 @@
 import config from '../config.ts'
-import {reconcileCommunitySubscriptions} from './community-subscriptions.ts'
+import {reconcileCommunitySubscriptions, reconcilePubsubTopics} from './community-subscriptions.ts'
 import {getCommunityPubsubTopicRoutingPins} from './community-cids.ts'
 import seederState from './seeder-state.ts'
 import {kubo, kuboPubsub, pkc} from './bitsocial.ts'
@@ -54,38 +54,11 @@ export const providePubsubTopicRoutingCids = async () => {
   }
 }
 
-export const joinPubsubTopics = async () => {
-  const pubsubTopics = Object.values(communitiesUpdating).map(community => community.pubsubTopic)
-
-  // Remove pubsub topics that no longer exist.
-  for (const pubsubTopic in pubsubTopicsJoined) {
-    if (!pubsubTopics.includes(pubsubTopic)) {
-      const {community, unsubscribe} = pubsubTopicsJoined[pubsubTopic]
-      unsubscribe().catch(logErrorMessage(community.address))
-      delete pubsubTopicsJoined[pubsubTopic]
-      console.log(`${community.address} unsubscribed pubsub`)
-    }
-  }
-
-  // Join pubsub topics.
-  for (const community of Object.values(communitiesUpdating)) {
-    const pubsubTopic = community.pubsubTopic
-    if (!pubsubTopic || pubsubTopicsJoined[pubsubTopic]) {
-      continue
-    }
-    const onMessage = () => {
-      console.log(`${community.address} new pubsub message`)
-    }
-    const onError = (error: any) => {
-      console.log(`${community.address} pubsub subscribe onError`, error)
-    }
-    kuboPubsub.pubsub.subscribe(pubsubTopic, onMessage, {onError}).then(() => {
-      console.log(`${community.address} subscribed pubsub`)
-      const unsubscribe = () => kuboPubsub.pubsub.unsubscribe(pubsubTopic, onMessage)
-      pubsubTopicsJoined[pubsubTopic] = {community, unsubscribe}
-    }).catch(logErrorMessage(community.address))
-  }
-}
+export const joinPubsubTopics = () => reconcilePubsubTopics({
+  communities: Object.values(communitiesUpdating),
+  joined: pubsubTopicsJoined,
+  pubsub: kuboPubsub.pubsub
+})
 
 const processPinOp = makeProcessPinOp(kubo)
 const processPubsubRoutingProvide = makeProcessPubsubRoutingProvide(kubo)

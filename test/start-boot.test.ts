@@ -6,6 +6,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import honker from '@russellthehippo/honker-node'
 import {createFakeKuboRpcServer, createFakePkcRpcServer} from './helpers/fake-daemon-rpcs.ts'
 
 const getFreePort = () => new Promise<number>((resolve, reject) => {
@@ -16,6 +17,35 @@ const getFreePort = () => new Promise<number>((resolve, reject) => {
   })
   server.once('error', reject)
 })
+
+// Scheduler entries are rows in seeder.db, so they outlive the run that registered them. This
+// leaves a database the way an earlier run with the other half enabled would have, with the
+// entries overdue so the scheduler fires them as soon as it runs.
+const registerStaleSchedulerEntries = (dbPath: string, names: string[]) => {
+  const db = honker.open(dbPath)
+  try {
+    const scheduler = db.scheduler()
+    for (const name of names) {
+      scheduler.add({name, queue: name, schedule: '@every 600s', payload: {}})
+    }
+    db.query('UPDATE _honker_scheduler_tasks SET next_fire_at = 0')
+  }
+  finally {
+    db.close()
+  }
+}
+const readSchedulerState = (dbPath: string) => {
+  const db = honker.open(dbPath)
+  try {
+    return {
+      entries: db.scheduler().list().map((entry: any) => entry.name).sort(),
+      queuedTicks: db.query('SELECT queue FROM _honker_live').map((row: any) => row.queue)
+    }
+  }
+  finally {
+    db.close()
+  }
+}
 
 // The published entrypoint is the bin shim (a bare `import '../start.ts'`). Run it with both
 // halves explicitly switched off ('none') so it exercises the shim and start.ts's
@@ -65,6 +95,9 @@ test('start.ts applies the default cap before subscribing, including on a legacy
   const communities = Array.from({length: 25}, (_, i) => ({address: `boot-${i}.bso`}))
   fs.writeFileSync(listPath, JSON.stringify({communities}))
   fs.writeFileSync(path.join(tmpDir, 'seederState.json'), JSON.stringify({communitiesSeeding: communities}))
+  // Left by an earlier run with votes on: with votes off nothing claims its ticks.
+  const dbPath = path.join(tmpDir, 'seeder.db')
+  registerStaleSchedulerEntries(dbPath, ['votes-tick'])
 
   const child = spawn(process.execPath, [path.resolve(import.meta.dirname, '..', 'start.ts')], {
     cwd: tmpDir,
@@ -121,12 +154,101 @@ test('start.ts applies the default cap before subscribing, including on a legacy
     assert.match(output, /received SIGINT, shutting down/)
     assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
     assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+
+    // The stale votes entry is gone and fired nothing; the community entries are this run's.
+    const {entries, queuedTicks} = readSchedulerState(dbPath)
+    assert.deepEqual(entries, ['discover-tick', 'pubsub-tick', 'subscribe-tick'])
+    assert.ok(!queuedTicks.includes('votes-tick'), `no votes ticks may pile up: ${queuedTicks}`)
   }
   finally {
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGKILL')
     }
     await Promise.all([pkcFake.close(), kuboFake.close()])
+    fs.rmSync(tmpDir, {recursive: true, force: true})
+  }
+})
+
+// start.ts and lib/daemon.ts used to run separate shutdown machines. On a communities-only
+// seeder start.ts had no cleanups, so it exited in the same tick as the signal, and daemon.ts's
+// exit hook SIGKILLed the bundled daemon right after its own handler had sent it SIGINT:
+// bitsocial-cli never got to stop its Kubo (left running outside Docker, hard-killed inside).
+// The bundled daemon here is a fake (helpers/fake-bundled-daemon.ts) that takes a second to stop.
+test('a shutdown signal lets the bundled daemon stop gracefully before start.ts exits', {timeout: 90_000}, async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitsocial-seeder-bundled-stop-'))
+  const [pkcPort, kuboPort] = await Promise.all([getFreePort(), getFreePort()])
+  const daemonLog = path.join(tmpDir, 'fake-daemon.log')
+  const listPath = path.join(tmpDir, 'communities.json')
+  fs.writeFileSync(listPath, JSON.stringify({communities: [{address: 'bundled-stop.bso'}]}))
+
+  const child = spawn(process.execPath, [
+    '--import', path.join(import.meta.dirname, 'helpers', 'fake-bundled-daemon-preload.ts'),
+    path.resolve(import.meta.dirname, '..', 'start.ts')
+  ], {
+    cwd: tmpDir,
+    env: {
+      ...process.env,
+      PKC_RPC_URL: `ws://127.0.0.1:${pkcPort}`,
+      KUBO_RPC_URL: `http://127.0.0.1:${kuboPort}/api/v0`,
+      SEEDER_DAEMON_AUTOSTART: 'true',
+      SEEDER_DAEMON_READY_STABLE_MS: '200',
+      SEEDER_TEST_DAEMON_LOG: daemonLog,
+      COMMUNITY_LIST_SOURCES: listPath,
+      COMMUNITY_EXTRA_LIST_SOURCES: '',
+      VOTES_MANIFEST_SOURCES: 'none',
+      SEEDER_DB_PATH: path.join(tmpDir, 'seeder.db'),
+      SEEDER_STATE_PATH: path.join(tmpDir, 'seederState.json'),
+      SEEDER_UPDATE_CHECK_ENABLED: 'false'
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  let output = ''
+  const seedingLine = new Promise<void>(resolve => {
+    const onData = (chunk: Buffer) => {
+      output += chunk.toString()
+      if (/seeding \d+ communities/.test(output)) {
+        resolve()
+      }
+    }
+    child.stdout!.on('data', onData)
+    child.stderr!.on('data', onData)
+  })
+  const exited = new Promise<{code: number | null, signal: string | null}>(resolve => {
+    child.once('exit', (code, signal) => resolve({code, signal}))
+  })
+  const timeout = (ms: number, what: string) => new Promise<never>((resolve, reject) => setTimeout(
+    () => reject(Error(`timed out waiting for ${what}\noutput:\n${output}`)),
+    ms
+  ).unref())
+  const readDaemonLog = () => fs.existsSync(daemonLog) ? fs.readFileSync(daemonLog, 'utf8') : ''
+
+  try {
+    await Promise.race([
+      seedingLine,
+      exited.then(({code, signal}) => {
+        throw Error(`start.ts exited before seeding started (code: ${code}, signal: ${signal})\noutput:\n${output}`)
+      }),
+      timeout(60_000, 'the seeding log line')
+    ])
+    assert.match(output, /starting bundled bitsocial daemon/)
+
+    child.kill('SIGTERM')
+    const {code, signal} = await Promise.race([exited, timeout(30_000, 'a clean shutdown')])
+    const daemonEvents = readDaemonLog()
+    assert.match(daemonEvents, /received SIGINT/)
+    assert.match(daemonEvents, /stopped gracefully/, `the bundled daemon must finish stopping before start.ts exits\ndaemon log:\n${daemonEvents}\noutput:\n${output}`)
+    assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
+    assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+  }
+  finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
+    const daemonPid = Number(readDaemonLog().match(/started (\d+)/)?.[1])
+    if (daemonPid) {
+      try { process.kill(daemonPid, 'SIGKILL') } catch {}
+    }
     fs.rmSync(tmpDir, {recursive: true, force: true})
   }
 })
@@ -180,6 +302,11 @@ test('start.ts boots votes-only when community seeding is off', {timeout: 120_00
   ])
 
   const manifestPath = writeVotesManifest(tmpDir)
+  // Left by an earlier run with communities on (switching to votes-only is the README's
+  // documented move): nothing claims those ticks on a votes-only seeder.
+  const dbPath = path.join(tmpDir, 'seeder.db')
+  const communityTickNames = ['discover-tick', 'subscribe-tick', 'pubsub-tick']
+  registerStaleSchedulerEntries(dbPath, communityTickNames)
 
   const child = spawn(process.execPath, [path.resolve(import.meta.dirname, '..', 'start.ts')], {
     cwd: tmpDir,
@@ -244,6 +371,11 @@ test('start.ts boots votes-only when community seeding is off', {timeout: 120_00
     assert.match(output, /received SIGINT, shutting down/)
     assert.equal(signal, null, `start.ts should exit itself, not die to the signal\noutput:\n${output}`)
     assert.equal(code, 0, `expected a clean exit\noutput:\n${output}`)
+
+    // The stale community entries are gone and fired nothing.
+    const {entries, queuedTicks} = readSchedulerState(dbPath)
+    assert.deepEqual(entries, ['votes-tick'])
+    assert.deepEqual(queuedTicks.filter(queue => communityTickNames.includes(queue)), [], 'no community ticks may pile up')
   }
   finally {
     if (child.exitCode === null && child.signalCode === null) {
