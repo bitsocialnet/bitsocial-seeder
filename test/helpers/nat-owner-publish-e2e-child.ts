@@ -392,6 +392,9 @@ try {
     // Bounded so a lost message reports which step was missing instead of the runner's
     // generic kill.
     const publishTimeoutMs = 120_000
+    // pkc-js 0.0.142+ unsubscribes a libp2p-js client from the topic once the verification
+    // arrives, so the seeder's topic peers are read while the exchange is still open.
+    let seederTopicPeers: string[] = []
     const verification: any = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(Error(`${label} publish timed out after ${publishTimeoutMs}ms, timings=${JSON.stringify(timings)}`)), publishTimeoutMs)
       const settle = (settleWith: () => void) => {
@@ -401,7 +404,12 @@ try {
       post.once('challenge', (challenge: any) => {
         timings.challenge = Date.now() - publishStart
         assert.equal(challenge.challenges?.[0]?.challenge, challengeQuestion)
-        post.publishChallengeAnswers({challengeAnswers: [challengeAnswer]}).catch((error: unknown) => settle(() => reject(error)))
+        seederKuboPubsub.pubsub.peers(pubsubTopic)
+          .then(peers => {
+            seederTopicPeers = peers.map(peer => peer.toString())
+            return post.publishChallengeAnswers({challengeAnswers: {'0': challengeAnswer}})
+          })
+          .catch((error: unknown) => settle(() => reject(error)))
       })
       post.once('challengeverification', (challengeVerification: any) => {
         timings.challengeverification = Date.now() - publishStart
@@ -410,19 +418,18 @@ try {
       post.once('error', (error: unknown) => settle(() => reject(error)))
       post.publish().catch((error: unknown) => settle(() => reject(error)))
     })
-    return {post, verification, timings}
+    return {post, verification, timings, seederTopicPeers}
   }
 
-  const {post, verification, timings} = await publishThroughSeeder('browser', browser.pkc)
+  const {post, verification, timings, seederTopicPeers} = await publishThroughSeeder('browser', browser.pkc)
   assert.equal(verification.challengeSuccess, true, `post publish failed: ${JSON.stringify(verification.challengeErrors || verification.reason)}`)
   assert.ok(post.cid, 'a verified post should have a cid')
   step(`browser post ${post.cid} verified through the seeder: challenge after ${timings.challenge}ms, verification after ${timings.challengeverification}ms`)
 
   // The messages can only have travelled browser → seeder → owner and back: the browser
-  // knows no peer but the seeder, and the seeder has both ends as topic peers.
+  // knows no peer but the seeder, and the seeder had both ends as topic peers during the exchange.
   const browserPeers = browser.libp2p.getPeers().map((peer: any) => peer.toString())
   assert.deepEqual(browserPeers, [seederPeerId], `the browser must only be connected to the seeder, got ${browserPeers.join(', ')}`)
-  const seederTopicPeers = (await seederKuboPubsub.pubsub.peers(pubsubTopic)).map(peer => peer.toString())
   assert.ok(seederTopicPeers.includes(ownerPeerId), `seeder topic peers should include the owner, got ${seederTopicPeers.join(', ')}`)
   assert.ok(seederTopicPeers.includes(browser.peerId), `seeder topic peers should include the browser, got ${seederTopicPeers.join(', ')}`)
   assert.ok(routerLookups > 0, 'the nodes should have discovered the seeder through the http router')
