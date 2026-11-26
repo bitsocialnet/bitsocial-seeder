@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.17](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.16...v0.10.17) (2026-11-26)
+
+Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.17`
+
+### Changes
+
+- fix(deps): upgrade @pkcprotocol/pkc-js 0.0.138 -> 0.0.163, bitsocial-cli 0.19.129 -> 0.19.148 (#39) ([e660ae6](https://github.com/bitsocialnet/bitsocial-seeder/commit/e660ae6d73457d7479e254ee87130379a3291a08))
+
 ## [0.10.16](https://github.com/bitsocialnet/bitsocial-seeder/compare/v0.10.15...v0.10.16) (2026-11-20)
 
 Docker image: `ghcr.io/bitsocialnet/bitsocial-seeder:0.10.16`
